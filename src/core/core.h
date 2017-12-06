@@ -24,7 +24,7 @@
 #include "toxfile.h"
 #include "toxid.h"
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <QMutex>
 #include <QObject>

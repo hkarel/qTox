@@ -26,7 +26,6 @@
 #include <atomic>
 #include <memory>
 #include <tox/tox.h> // for TOX_VERSION_IS_API_COMPATIBLE macro
-#include <tox/toxav.h>
 
 class Friend;
 class Group;

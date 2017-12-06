@@ -18,8 +18,9 @@
 */
 
 #include "toxencrypt.h"
-#include <tox/tox.h>  // TOX_VERSION_IS_API_COMPATIBLE
-#include <tox/toxencryptsave.h>
+#include <toxcore/tox.h>  // TOX_VERSION_IS_API_COMPATIBLE
+#include <toxencryptsave/toxencryptsave.h>
+
 
 #include <QByteArray>
 #include <QDebug>

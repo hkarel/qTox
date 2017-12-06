@@ -7,7 +7,7 @@
 #include <QtGlobal>
 #include <cstdint>
 
-#include <tox/toxav.h>
+#include <toxav/toxav.h>
 
 class QTimer;
 class AudioFilterer;

@@ -805,6 +805,7 @@ bool parseConferenceSendMessageError(TOX_ERR_CONFERENCE_SEND_MESSAGE error)
         qCritical() << "Unknown TOX_ERR_CONFERENCE_SEND_MESSAGE error";
         return false;
     }
+    return false;
 }
 
 void Core::sendGroupMessageWithType(int groupId, const QString& message, TOX_MESSAGE_TYPE type)

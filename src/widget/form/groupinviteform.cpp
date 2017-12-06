@@ -38,7 +38,7 @@
 #include <QWindow>
 
 #include <algorithm>
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 /**
  * @class GroupInviteForm

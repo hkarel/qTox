@@ -1,6 +1,6 @@
 #include "toxpk.h"
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <QByteArray>
 #include <QString>

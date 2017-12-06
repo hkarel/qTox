@@ -20,8 +20,9 @@
 #ifndef CHAT_FORM_HEADER
 #define CHAT_FORM_HEADER
 
-#include <QWidget>
+#include "src/widget/tool/callconfirmwidget.h"
 
+#include <QWidget>
 #include <memory>
 
 class MaskablePixmapWidget;

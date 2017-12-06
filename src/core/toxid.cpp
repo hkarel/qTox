@@ -21,7 +21,7 @@
 #include "toxid.h"
 #include "toxpk.h"
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <QRegularExpression>
 #include <cstdint>
