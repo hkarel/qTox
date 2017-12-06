@@ -1,0 +1,9 @@
+[submodule "qbs"]
+	path = qbs
+	url = https://github.com/hkarel/QbsExt.git
+[submodule "3rdparty/filter_audio"]
+	path = 3rdparty/filter_audio
+	url = https://github.com/irungentoo/filter_audio.git
+[submodule "3rdparty/toxcore"]
+	path = 3rdparty/toxcore
+	url = https://github.com/TokTok/c-toxcore.git

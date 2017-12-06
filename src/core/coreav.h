@@ -25,7 +25,7 @@
 #include <QObject>
 #include <atomic>
 #include <memory>
-#include <tox/toxav.h>
+#include <toxav/toxav.h>
 
 class Friend;
 class Group;
