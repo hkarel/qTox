@@ -9,33 +9,37 @@ echo "jobs: $jobs"
 
 rebuild=
 print_help=
-install=
 build_mode=release
+install=
+remove_install=
 need_packages=
 
-#build_deb_package=
-#build_deb_package_support=true
+build_deb_package=
+build_deb_package_support=false
 
 # Directory of this script
 script_dir=$(dirname $(readlink -f $0))
 echo "script_dir: $script_dir"
 
-display_help()
+# Detect host system parameters
+if [ ! -e $script_dir/setup/os_detect ]; then
+    echo "Error: os_detect script not found"
+    exit 1
+fi
+. $script_dir/setup/os_detect
+
+
+function display_help()
 {
 cat << EOF
-Usage: ${0##*/} [hrdbsD]
+Usage: ${0##*/} [hrdDiR]
   -h  display this help and exit
-  -i  install
   -r  full rebuild of project
   -d  build in 'debug' mode 
   -D  build deb package
+  -i  install
+  -R  remove installation and exit
 EOF
-}
-
-check_need_package()
-{
-    local res=$(dpkg -l | grep -P "^ii\s+${1}")
-    [ -z "$res" ] && echo "Error: Need to install '$1' package" && need_packages=TRUE
 }
 
 # Processing of positional parameters:
@@ -47,10 +51,6 @@ do
             print_help=yes
             shift
             ;;
-       -i)
-            install=yes
-            shift
-            ;;
         -r)
             rebuild=yes
             shift
@@ -59,11 +59,20 @@ do
             build_mode=debug
             shift
             ;;
-#         -D)
-#             build_deb_package=yes
-#             build_deb_package_support=true
-#             shift
-#             ;;
+        -D)
+            build_deb_package=yes
+            build_deb_package_support=true
+            shift
+            ;;
+        -i)
+            install=yes
+            build_deb_package_support=true
+            shift
+            ;;
+        -R)
+            remove_install=yes
+            shift
+            ;;
         -*)
             echo "Error: Unknown option: $1" >&2
             exit 1
@@ -79,15 +88,106 @@ if [ "$print_help" = "yes" ]; then
     exit 0
 fi
 
-# if [ "$build_deb_package" = "yes" ]; then
-#     # Required packages
-#     need_packages=
-#     check_need_package 'md5deep'
-#     check_need_package 'debconf'
-#     check_need_package 'debhelper'
-#     check_need_package 'lintian'
-#     [ "$need_packages" = "TRUE" ] && exit 1;
-# fi
+if [ "$remove_install" = "yes" ]; then
+    echo "Remove qTox..."
+
+    set +e
+    res=$(dpkg -l | grep -P '^ii\s+qtox')
+    set -e
+    if [ -z "$res" ]; then
+        echo "Nothing to remove, qTox not installed"
+        exit 0
+    fi
+    sudo dpkg -r qtox
+    echo "qTox was removed"
+    exit 0
+fi
+
+function check_need_package()
+{
+    #local res=$(dpkg -l | grep -P "^ii\s+${1}")
+    #[ -z "$res" ] && need_packages="$need_packages $1"
+    dpkg -s $1 &> /dev/null
+    [ "$?" -ne 0 ] && need_packages="$need_packages $1"
+}
+
+need_packages=
+check_need_package 'libx11-dev'
+check_need_package 'libxss-dev'
+check_need_package 'libglib2.0-dev'
+check_need_package 'libgdk-pixbuf2.0-dev'
+check_need_package 'libgtk2.0-dev'
+check_need_package 'libcairo2-dev'
+check_need_package 'libopus-dev'
+check_need_package 'libopenal-dev'
+check_need_package 'libqrencode-dev'
+check_need_package 'libexif-dev'
+check_need_package 'libsqlite3-dev'
+check_need_package 'zlib1g-dev'
+
+if [ "$os_id" = "ubuntu" -a "$os_ver" = "14.04" ]; then
+    check_need_package 'libxext-dev'
+    check_need_package 'libxv-dev'
+    check_need_package 'libxcb1-dev'
+    check_need_package 'libxcb-shm0-dev'
+    check_need_package 'libxcb-xfixes0-dev'
+    check_need_package 'libxcb-shape0-dev'
+    check_need_package 'libasound2-dev'
+    check_need_package 'libpulse-dev'
+    check_need_package 'libgnutls28-dev'
+    check_need_package 'libsoxr-dev'
+    check_need_package 'libvorbis-dev'
+    check_need_package 'libvdpau-dev'
+    check_need_package 'libva-dev'
+    check_need_package 'libfreetype6-dev'
+    check_need_package 'libass-dev'
+    check_need_package 'libmlt-dev'
+    check_need_package 'libmlt++-dev'
+    check_need_package 'libvidstab-dev'
+    check_need_package 'libzimg-dev'
+    check_need_package 'libaacs-dev'
+    check_need_package 'libbz2-dev'
+    check_need_package 'libsdl2-dev'
+    check_need_package 'libx264-dev'
+    check_need_package 'libx265-dev'
+    check_need_package 'libmp3lame-dev'
+    check_need_package 'libxvidcore-dev'
+    check_need_package 'libspeex-dev'
+    check_need_package 'libtheora-dev'
+    check_need_package 'libopencore-amrnb-dev'
+    check_need_package 'libopencore-amrwb-dev'
+    check_need_package 'libwavpack-dev'
+    check_need_package 'libfdk-aac-dev'
+
+    res=$(dpkg -l | grep -P "^ii\s+libvpx3:.*1\.5\.0-")
+        if [ -z "$res" ]; then
+        echo "Error: Need to install flibvpx-dev package, version 1.5.0"
+        exit 1
+    fi
+
+    res=$(dpkg -l | grep -P "^ii\s+ffmpeg.*7:3\.3\.3~trusty")
+    if [ -z "$res" ]; then
+        echo "Error: Need to install ffmpeg 3.3.3 package"
+        echo "    Use ppa:mc3man/trusty-media"
+        echo "    sudo add-apt-repository ppa:mc3man/trusty-media"
+        echo "    sudo apt-get update"
+        echo "    sudo apt-get install ffmpeg"
+        exit 1
+    fi
+fi
+
+if [ "$build_deb_package" = "yes" -o "$install" = "yes" ]; then
+    # Required packages
+    check_need_package 'md5deep'
+    check_need_package 'debconf'
+    check_need_package 'debhelper'
+    check_need_package 'lintian'
+fi
+
+if [ -n "$need_packages" ]; then
+    echo "Error: Need to install packages:$need_packages"
+    exit 1
+fi
 
 git_branch=$(git status -b -s | head -n1 | sed 's/\./ /' | cut -d' ' -f2)
 build_subdir=${build_mode}-${git_branch}
@@ -105,30 +205,184 @@ $QBS build \
     --jobs $jobs \
     --no-install \
     qbs.buildVariant:$build_mode \
+    project.printPackegeBuildInfo:$build_deb_package_support \
     profile:qtox $build_subdir
 
-if [ "$install" = "yes" ]; then
-    stc_dir=$(pwd)
-    cd /usr/local/bin
-    if [ -f qtox ]; then
-        echo "Archiving the qtox ..."
-        sudo tar -cjf qtox_$(date +%Y.%m.%d_%H.%M.%S).tar.bz2 qtox
-        sudo rm -rf qtox
-    fi
-    cd $stc_dir
-    
-    sudo $QBS install \
-        --file qtox_project.qbs \
-        --build-directory ./build \
-        --no-build \
-        --install-root /usr/local \
-        qbs.buildVariant:$build_mode \
-        profile:qtox $build_subdir
-
-    if [ "$build_mode" = "release" ]; then
-        echo "Removing debug info ... "
-        sudo strip --strip-debug --strip-unneeded /usr/local/bin/qtox
-    fi
-    echo "Installation successfully completed"
+if [ "$build_deb_package" != "yes" -a "$install" != "yes" ]; then
+    exit 0
 fi
 
+#
+# The script for creating the DEB package
+#
+package_dir=$script_dir/build/${build_subdir}/deb
+echo "package_dir: $package_dir"
+
+package_vers=$(git describe --tags)
+package_vers=$(echo $package_vers | sed -r -e 's/v//; s/^([^-]*)-.*/\1/')
+echo "package_vers: $package_vers"
+
+package_date=$(date +%Y%m%d)
+echo "package_date: $package_date"
+
+gitrev=$(git log -1 --pretty=%h)
+echo "gitrev: $gitrev"
+
+package_name="qtox-${package_vers}-${package_date}git${gitrev}-${os_id}${os_ver}-${os_arch}.deb"
+echo "package_name: $package_name"
+
+
+#
+# Forming a deb package
+#
+rm -rf $package_dir
+
+mkdir -p $package_dir/DEBIAN
+mkdir -p $package_dir/opt/qtox
+mkdir -p $package_dir/opt/qtox/lib
+mkdir -p $package_dir/opt/qtox/plugins
+mkdir -p $package_dir/usr/share/applications
+
+cp $script_dir/setup/deb/DEBIAN/*  $package_dir/DEBIAN
+cp $script_dir/setup/qt.conf       $package_dir/opt/qtox
+cp ${build_dir}/bin/qtox           $package_dir/opt/qtox
+cp $script_dir/qtox.desktop        $package_dir/usr/share/applications
+
+for f in $(cat ${build_dir}/package_build_info); do
+    [ -n "$f" ] && cp -P $f $package_dir/opt/qtox/lib
+done
+rm -f $package_dir/opt/qtox/lib/*.py
+
+for f in $(cat ${build_dir}/package_build_info2 | head -n1); do
+    [ -n "$f" ] && cp -r -P $f $package_dir/opt/qtox/plugins
+done
+
+function copy_pict()
+{
+    mkdir -p $package_dir/usr/share/icons/hicolor/${1}/apps
+    cp $script_dir/img/icons/${1}/qtox.png $package_dir/usr/share/icons/hicolor/${1}/apps/qtox.png
+    chmod -R u=rwX,go=rX $package_dir/usr/share/icons/hicolor/${1}/apps
+    chmod -R u=rw,go=r   $package_dir/usr/share/icons/hicolor/${1}/apps/*
+}
+copy_pict "16x16"
+copy_pict "22x22"
+copy_pict "24x24"
+copy_pict "32x32"
+copy_pict "36x36"
+copy_pict "48x48"
+copy_pict "64x64"
+copy_pict "72x72"
+copy_pict "96x96"
+copy_pict "128x128"
+copy_pict "192x192"
+copy_pict "256x256"
+copy_pict "512x512"
+
+chmod -R go-w        $package_dir
+chmod    u=rwx,go=rx $package_dir/DEBIAN/post*
+chmod    u=rwx,go=rx $package_dir/DEBIAN/pre*
+chmod -R u=rwX,go=rX $package_dir/opt/qtox
+chmod -R u=rw,go=r   $package_dir/opt/qtox/qt.conf
+chmod -R u=rwx,go=rx $package_dir/opt/qtox/qtox
+chmod -R u=rwX,go=rX $package_dir/opt/qtox/lib
+chmod    u=rw,go=r   $package_dir/opt/qtox/lib/*
+chmod -R u=rwX,go=rX $package_dir/opt/qtox/plugins
+for f in $(find $package_dir/opt/qtox/plugins -type f); do
+    chmod u=rw,go=r  $f
+done
+
+if [ "$build_mode" = "release" ]; then
+    echo "Removing debug info ... "
+    strip --strip-debug --strip-unneeded $package_dir/opt/qtox/qtox
+    if [ -e $package_dir/opt/qtox/lib/libstdc++.so.6.0.21 ]; then
+        strip --strip-debug --strip-unneeded $package_dir/opt/qtox/lib/libgcc_s.so.1
+        strip --strip-debug --strip-unneeded $package_dir/opt/qtox/lib/libstdc++.so.6.0.21
+    fi
+fi
+
+# The size of deb-package
+installed_size=$(du -s $package_dir | sed -r 's/([0-9]+).*/\1/')
+echo "installed_size: $installed_size"
+
+packet_depends=
+if [ "$os_id" = "ubuntu" -a "$os_ver" = "14.04" ]; then
+    packet_depends=$(cat << EOS
+      libc6, \
+      libx11-6,libxss1,libglib2.0-0,libgdk-pixbuf2.0-0,libgtk2.0-0,libcairo2, \
+      libopus0,libopenal1,libqrencode3,libexif12,libsqlite3-0,zlib1g, \
+      libxext6,libxv1,libxcb1,libxcb-shm0,libxcb-xfixes0,libxcb-shape0, \
+      libasound2,libpulse0,libpulse-mainloop-glib0,libgnutls28,libsoxr0, \
+      libvorbis0a,libvorbisenc2,libvdpau1,libva1,libva-drm1,libva-x11-1, \
+      libfreetype6,libass5,libmlt6,libmlt++3,libvidstab1.0,libzimg2,libaacs0, \
+      libbz2-1.0,libsdl2-2.0-0,libx264-148,libx265-130,libmp3lame0,libxvidcore4, \
+      libspeex1,libtheora0,libopencore-amrnb0,libopencore-amrwb0,libwavpack1, \
+      libfdk-aac1,libpcre3,libffi6,libpangocairo-1.0-0,libxfixes3,libxfixes3, \
+      libpangoft2-1.0-0,libpango-1.0-0,libfontconfig1,libxrender1,libxinerama1, \
+      libxi6,libxrandr2,libxcursor1,libxcomposite1,libxdamage1,libselinux1, \
+      libpixman-1-0,libpng12-0,libxcb-render0,libxau6,libxdmcp6,libjson-c2, \
+      libdbus-1-3,libp11-kit0,libtasn1-6,libnettle4,libhogweed2,libgmp10, \
+      libgomp1,libogg0,libdrm2,libfribidi0,libharfbuzz0b,libgcrypt11, \
+      libgpg-error0,libxxf86vm1,libwayland-egl1-mesa,libwayland-client0, \
+      libwayland-cursor0,libxkbcommon0,libnuma1,libthai0,libexpat1,libwrap0, \
+      libsndfile1,libasyncns0,libgraphite2-3,libx11-xcb1,libxcb-glx0, \
+      libxcb-dri3-0,libxcb-present0,libxcb-sync1,libxshmfence1,libdatrie1, \
+      libflac8
+EOS
+)
+elif [ "$os_id" = "ubuntu" -a "$os_ver" = "16.04" ]; then
+    echo "Error: Add depends" >&2
+    exit 1
+else
+    echo "Error: Unsupported OS" >&2
+    exit 1
+fi
+
+sed -e "s/%VERSION%/${package_vers}-${package_date}git${gitrev}/" \
+    -e "s/%ARCHITECTURE%/${os_arch}/" \
+    -e "s/%INSTALLED_SIZE%/${installed_size}/" \
+    -e "s/%DEPENDS%/${packet_depends}/" \
+    -i $package_dir/DEBIAN/control
+
+sed -e "s|TryExec=qtox|TryExec=/opt/qtox/qtox|" \
+    -e "s|Exec=qtox|Exec=/opt/qtox/qtox|" \
+    -i $package_dir/usr/share/applications/qtox.desktop
+
+# Checksums of package files
+cd $package_dir
+md5deep -rl -o f opt >> DEBIAN/md5sums
+md5deep -rl -o f usr >> DEBIAN/md5sums
+chmod  0644 DEBIAN/md5sums
+cd $script_dir
+
+# Creating a deb-package
+fakeroot dpkg-deb --build $package_dir ${build_dir}/$package_name
+
+# Checking the deb-package
+echo "Start 'lintian'"
+set +e
+lintian --suppress-tags \
+hardening-no-relro,\
+binary-or-shlib-defines-rpath,\
+dir-or-file-in-opt,\
+bad-package-name,\
+package-not-lowercase,\
+systemd-service-file-outside-lib,\
+maintainer-script-calls-systemctl,\
+file-in-etc-not-marked-as-conffile,\
+maintainer-script-ignores-errors,\
+maintainer-script-empty \
+${build_dir}/$package_name
+set -e
+
+if [ "$build_deb_package" = "yes" ]; then
+    cd $script_dir
+    mkdir -p packages
+    echo "Copying the file $package_name to directory ./packages"
+    cp -f ${build_dir}/$package_name ./packages
+fi
+
+if [ "$install" = "yes" ]; then
+    echo "Install qTox..."
+    sudo dpkg -i ${build_dir}/$package_name
+    echo "qTox installation is complete"
+fi
