@@ -6,8 +6,12 @@ import "qbs/imports/QbsUtl/qbsutl.js" as QbsUtl
 
 Project {
     name: "qTox Project"
-    minimumQbsVersion: "1.8.0"
+    minimumQbsVersion: "1.10.0"
     qbsSearchPaths: ["qbs"]
+
+    // The attribute of output of additional information
+    // in the file package_build_info, used to build a deb-package
+    readonly property bool printPackegeBuildInfo: false
 
     property string toxPrefix: "toxcore/"
     property string useSmileys: "yes"

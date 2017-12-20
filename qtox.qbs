@@ -1,5 +1,5 @@
 import qbs
-import qbs.Probes
+import qbs.TextFile
 import GccUtl
 import QbsUtl
 
@@ -10,11 +10,11 @@ Product {
     consoleApplication: false
     destinationDirectory: "./bin"
 
-    Group {
-        fileTagsFilter: "application"
-        qbs.install: true
-        qbs.installDir: "bin"
-    }
+    //Group {
+    //    fileTagsFilter: "application"
+    //    qbs.install: true
+    //    qbs.installDir: "bin"
+    //}
 
     property bool platformExtensions: true
 
@@ -28,7 +28,7 @@ Product {
     //Depends { name: "ToxAV" }
     //Depends { name: "ToxDNS" }
     Depends { name: "ToxGroup" }
-    Depends { name: "Qt"; submodules: ["core", "network", "widgets", "svg", "xml"] }
+    Depends { name: "Qt"; submodules: ["core", "network", "gui", "widgets", "dbus", "svg", "xml"] }
 
     lib.sodium.useSystem: false
     lib.sodium.version: project.sodiumVersion
@@ -50,11 +50,40 @@ Product {
 
     Probe {
         id: productProbe
+        readonly property bool printPackegeBuildInfo: project.printPackegeBuildInfo
+        readonly property string projectBuildDirectory: project.buildDirectory
         property string compilerLibraryPath
         configure: {
             lib.sodium.probe();
             lib.ffmpeg.probe();
             compilerLibraryPath = GccUtl.compilerLibraryPath(cpp.compilerPath);
+            if (printPackegeBuildInfo) {
+                var file = new TextFile(projectBuildDirectory + "/package_build_info", TextFile.WriteOnly);
+                var libFiles = []
+                libFiles.push(Qt.core.libFilePathRelease);
+                libFiles.push(Qt.network.libFilePathRelease);
+                libFiles.push(Qt.gui.libFilePathRelease);
+                libFiles.push(Qt.widgets.libFilePathRelease);
+                libFiles.push(Qt.dbus.libFilePathRelease);
+                libFiles.push(Qt.svg.libFilePathRelease);
+                libFiles.push(Qt.xml.libFilePathRelease);
+                libFiles.push(Qt.core.libPath + "/libQt5XcbQpa.so.5");
+                libFiles.push(Qt.core.libPath + "/libicui18n.so.56");
+                libFiles.push(Qt.core.libPath + "/libicuuc.so.56");
+                libFiles.push(Qt.core.libPath + "/libicudata.so.56");
+                for (var i in libFiles)
+                    file.writeLine(libFiles[i].replace(/\.so\..*$/, ".so*"));
+
+                if (!compilerLibraryPath.startsWith("/usr/lib", 0)) {
+                    file.writeLine(compilerLibraryPath + "/" + "libstdc++.so*");
+                    file.writeLine(compilerLibraryPath + "/" + "libgcc_s.so*");
+                }
+                file.close();
+
+                var file = new TextFile(projectBuildDirectory + "/package_build_info2", TextFile.WriteOnly);
+                file.writeLine(Qt.core.pluginPath + "/*");
+                file.close();
+            }
         }
     }
 
@@ -197,8 +226,9 @@ Product {
 
     cpp.rpaths: QbsUtl.concatPaths(
         productProbe.compilerLibraryPath,
+        "/opt/qtox/lib"
         //lib.sodium.libraryPath,
-        "$ORIGIN/../lib"
+        //"$ORIGIN/../lib/qtox"
     )
 
     cpp.staticLibraries: {

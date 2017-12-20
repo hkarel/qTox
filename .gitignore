@@ -55,3 +55,6 @@ target/
 
 # Tarballs
 *.tar.*
+
+# Deb packages
+packages/*
