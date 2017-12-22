@@ -16,7 +16,7 @@ Project {
     property string toxPrefix: "toxcore/"
     property string useSmileys: "yes"
 
-    property string sodiumVersion: "1.0.15"
+    property string sodiumVersion: "1.0.16"
     property string ffmpegVersion: "3.3.3"
 
     property string osName: osProbe.osName
