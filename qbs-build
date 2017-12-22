@@ -112,6 +112,7 @@ function check_need_package()
 }
 
 need_packages=
+check_need_package 'libatk1.0-dev'
 check_need_package 'libx11-dev'
 check_need_package 'libxss-dev'
 check_need_package 'libglib2.0-dev'
@@ -123,58 +124,77 @@ check_need_package 'libopenal-dev'
 check_need_package 'libqrencode-dev'
 check_need_package 'libexif-dev'
 check_need_package 'libsqlite3-dev'
+check_need_package 'libpango1.0-dev'
 check_need_package 'zlib1g-dev'
+check_need_package 'libconfig-dev'
 
-if [ "$os_id" = "ubuntu" -a "$os_ver" = "14.04" ]; then
-    check_need_package 'libxext-dev'
-    check_need_package 'libxv-dev'
-    check_need_package 'libxcb1-dev'
-    check_need_package 'libxcb-shm0-dev'
-    check_need_package 'libxcb-xfixes0-dev'
-    check_need_package 'libxcb-shape0-dev'
-    check_need_package 'libasound2-dev'
-    check_need_package 'libpulse-dev'
-    check_need_package 'libgnutls28-dev'
-    check_need_package 'libsoxr-dev'
-    check_need_package 'libvorbis-dev'
-    check_need_package 'libvdpau-dev'
-    check_need_package 'libva-dev'
-    check_need_package 'libfreetype6-dev'
-    check_need_package 'libass-dev'
-    check_need_package 'libmlt-dev'
-    check_need_package 'libmlt++-dev'
-    check_need_package 'libvidstab-dev'
-    check_need_package 'libzimg-dev'
-    check_need_package 'libaacs-dev'
-    check_need_package 'libbz2-dev'
-    check_need_package 'libsdl2-dev'
-    check_need_package 'libx264-dev'
-    check_need_package 'libx265-dev'
-    check_need_package 'libmp3lame-dev'
-    check_need_package 'libxvidcore-dev'
-    check_need_package 'libspeex-dev'
-    check_need_package 'libtheora-dev'
-    check_need_package 'libopencore-amrnb-dev'
-    check_need_package 'libopencore-amrwb-dev'
-    check_need_package 'libwavpack-dev'
-    check_need_package 'libfdk-aac-dev'
+if [ "$os_id" = "ubuntu" -a "$os_ver" = "16.04" ]; then
 
+    res=$(dpkg -l | grep -P "^ii\s+ffmpeg-static.*7:4\.[0-9]\.[0-9]")
+    if [ -z "$res" ]; then
+        echo "Error: Need to install ffmpeg package"
+        echo "    Use ppa:mc3man/ffmpeg-test"
+        echo "    sudo add-apt-repository ppa:mc3man/ffmpeg-test"
+        echo "    sudo apt-get update"
+        echo "    sudo apt-get install ffmpeg"
+        exit 1
+    fi
+    check_need_package 'libvpx-dev'
+    check_need_package 'libsndio-dev'
+    check_need_package 'libgsm1-dev'
+    check_need_package 'libopenjp2-7-dev'
+    
+elif [ "$os_id" = "ubuntu" -a "$os_ver" = "14.04" ]; then
+
+    res=$(dpkg -l | grep -P "^ii\s+ffmpeg.*7:3\.[0-9]\.[0-9]")
+    if [ -z "$res" ]; then
+        echo "Error: Need to install ffmpeg package"
+        echo "    Use ppa:mc3man/ffmpeg-test"
+        echo "    sudo add-apt-repository ppa:mc3man/ffmpeg-test"
+        echo "    sudo apt-get update"
+        echo "    sudo apt-get install ffmpeg"
+        exit 1
+    fi
     res=$(dpkg -l | grep -P "^ii\s+libvpx3:.*1\.5\.0-")
         if [ -z "$res" ]; then
         echo "Error: Need to install flibvpx-dev package, version 1.5.0"
         exit 1
     fi
-
-    res=$(dpkg -l | grep -P "^ii\s+ffmpeg.*7:3\.3\.3~trusty")
-    if [ -z "$res" ]; then
-        echo "Error: Need to install ffmpeg 3.3.3 package"
-        echo "    Use ppa:mc3man/trusty-media"
-        echo "    sudo add-apt-repository ppa:mc3man/trusty-media"
-        echo "    sudo apt-get update"
-        echo "    sudo apt-get install ffmpeg"
-        exit 1
-    fi
 fi
+
+# For FFmpeg
+check_need_package 'libxext-dev'
+check_need_package 'libxv-dev'
+check_need_package 'libxcb1-dev'
+check_need_package 'libxcb-shm0-dev'
+check_need_package 'libxcb-xfixes0-dev'
+check_need_package 'libxcb-shape0-dev'
+check_need_package 'libasound2-dev'
+check_need_package 'libpulse-dev'
+check_need_package 'libgnutls28-dev'
+check_need_package 'libsoxr-dev'
+check_need_package 'libvorbis-dev'
+check_need_package 'libvdpau-dev'
+check_need_package 'libva-dev'
+check_need_package 'libfreetype6-dev'
+check_need_package 'libass-dev'
+check_need_package 'libmlt-dev'
+check_need_package 'libmlt++-dev'
+check_need_package 'libvidstab-dev'
+check_need_package 'libzimg-dev'
+check_need_package 'libaacs-dev'
+check_need_package 'libbz2-dev'
+check_need_package 'libsdl2-dev'
+check_need_package 'libx264-dev'
+check_need_package 'libx265-dev'
+check_need_package 'libmp3lame-dev'
+check_need_package 'libxvidcore-dev'
+check_need_package 'libspeex-dev'
+check_need_package 'libtheora-dev'
+check_need_package 'libopencore-amrnb-dev'
+check_need_package 'libopencore-amrwb-dev'
+check_need_package 'libwavpack-dev'
+check_need_package 'libfdk-aac-dev'
 
 if [ "$build_deb_package" = "yes" -o "$install" = "yes" ]; then
     # Required packages
@@ -186,6 +206,7 @@ fi
 
 if [ -n "$need_packages" ]; then
     echo "Error: Need to install packages:$need_packages"
+    echo "    Use: sudo apt-get install $need_packages"
     exit 1
 fi
 
@@ -205,7 +226,7 @@ $QBS build \
     --jobs $jobs \
     --no-install \
     qbs.buildVariant:$build_mode \
-    project.printPackegeBuildInfo:$build_deb_package_support \
+    project.printPackegeBuildInfo:true \
     profile:qtox $build_subdir
 
 if [ "$build_deb_package" != "yes" -a "$install" != "yes" ]; then
@@ -222,6 +243,7 @@ package_vers=$(git describe --tags)
 package_vers=$(echo $package_vers | sed -r -e 's/v//; s/^([^-]*)-.*/\1/')
 echo "package_vers: $package_vers"
 
+#package_date=$(date +%y%m%d%H%M)
 package_date=$(date +%Y%m%d)
 echo "package_date: $package_date"
 
@@ -246,12 +268,14 @@ mkdir -p $package_dir/usr/share/applications
 cp $script_dir/setup/deb/DEBIAN/*  $package_dir/DEBIAN
 cp $script_dir/setup/qt.conf       $package_dir/opt/qtox
 cp ${build_dir}/bin/qtox           $package_dir/opt/qtox
-cp $script_dir/qtox.desktop        $package_dir/usr/share/applications
+cp $script_dir/io.github.qtox.qTox.desktop  $package_dir/usr/share/applications
 
 for f in $(cat ${build_dir}/package_build_info); do
     [ -n "$f" ] && cp -P $f $package_dir/opt/qtox/lib
 done
 rm -f $package_dir/opt/qtox/lib/*.py
+rm -f $package_dir/opt/qtox/lib/libx264.so
+rm -f $package_dir/opt/qtox/lib/libx264.so.148
 
 for f in $(cat ${build_dir}/package_build_info2 | head -n1); do
     [ -n "$f" ] && cp -r -P $f $package_dir/opt/qtox/plugins
@@ -304,38 +328,33 @@ fi
 installed_size=$(du -s $package_dir | sed -r 's/([0-9]+).*/\1/')
 echo "installed_size: $installed_size"
 
-packet_depends=
+packet_depends=$(cat << EOS
+    libc6, \
+    libx11-6,libxss1,libglib2.0-0,libgdk-pixbuf2.0-0,libgtk2.0-0,libcairo2, \
+    libopus0,libopenal1,libqrencode3,libexif12,libsqlite3-0,zlib1g,libxext6, \
+    libxv1,libxcb1,libxcb-shm0,libxcb-xfixes0,libxcb-shape0,libasound2,libpulse0, \
+    libpulse-mainloop-glib0,libsoxr0,libvorbis0a,libvorbisenc2,libvdpau1,libva1, \
+    libva-drm1,libva-x11-1, libfreetype6,libass5,libmlt6,libmlt++3,libaacs0, \
+    libbz2-1.0,libsdl2-2.0-0,libmp3lame0,libxvidcore4,libspeex1, \
+    libtheora0,libopencore-amrnb0,libopencore-amrwb0,libwavpack1,libconfig9,
+EOS
+)
+packet_depends1=
 if [ "$os_id" = "ubuntu" -a "$os_ver" = "14.04" ]; then
-    packet_depends=$(cat << EOS
-      libc6, \
-      libx11-6,libxss1,libglib2.0-0,libgdk-pixbuf2.0-0,libgtk2.0-0,libcairo2, \
-      libopus0,libopenal1,libqrencode3,libexif12,libsqlite3-0,zlib1g, \
-      libxext6,libxv1,libxcb1,libxcb-shm0,libxcb-xfixes0,libxcb-shape0, \
-      libasound2,libpulse0,libpulse-mainloop-glib0,libgnutls28,libsoxr0, \
-      libvorbis0a,libvorbisenc2,libvdpau1,libva1,libva-drm1,libva-x11-1, \
-      libfreetype6,libass5,libmlt6,libmlt++3,libvidstab1.0,libzimg2,libaacs0, \
-      libbz2-1.0,libsdl2-2.0-0,libx264-148,libx265-130,libmp3lame0,libxvidcore4, \
-      libspeex1,libtheora0,libopencore-amrnb0,libopencore-amrwb0,libwavpack1, \
-      libfdk-aac1,libpcre3,libffi6,libpangocairo-1.0-0,libxfixes3,libxfixes3, \
-      libpangoft2-1.0-0,libpango-1.0-0,libfontconfig1,libxrender1,libxinerama1, \
-      libxi6,libxrandr2,libxcursor1,libxcomposite1,libxdamage1,libselinux1, \
-      libpixman-1-0,libpng12-0,libxcb-render0,libxau6,libxdmcp6,libjson-c2, \
-      libdbus-1-3,libp11-kit0,libtasn1-6,libnettle4,libhogweed2,libgmp10, \
-      libgomp1,libogg0,libdrm2,libfribidi0,libharfbuzz0b,libgcrypt11, \
-      libgpg-error0,libxxf86vm1,libwayland-egl1-mesa,libwayland-client0, \
-      libwayland-cursor0,libxkbcommon0,libnuma1,libthai0,libexpat1,libwrap0, \
-      libsndfile1,libasyncns0,libgraphite2-3,libx11-xcb1,libxcb-glx0, \
-      libxcb-dri3-0,libxcb-present0,libxcb-sync1,libxshmfence1,libdatrie1, \
-      libflac8
+  packet_depends1=$(cat << EOS
+    libgnutls28,libx264-148
 EOS
 )
 elif [ "$os_id" = "ubuntu" -a "$os_ver" = "16.04" ]; then
-    echo "Error: Add depends" >&2
-    exit 1
+  packet_depends1=$(cat << EOS
+    libvpx3,libgnutls30,libsndio6.1,libgsm1,libopenjp2-7,libatk-adaptor,libgail-common
+EOS
+)
 else
     echo "Error: Unsupported OS" >&2
     exit 1
 fi
+packet_depends="${packet_depends}${packet_depends1}"
 
 sed -e "s/%VERSION%/${package_vers}-${package_date}git${gitrev}/" \
     -e "s/%ARCHITECTURE%/${os_arch}/" \
@@ -345,7 +364,7 @@ sed -e "s/%VERSION%/${package_vers}-${package_date}git${gitrev}/" \
 
 sed -e "s|TryExec=qtox|TryExec=/opt/qtox/qtox|" \
     -e "s|Exec=qtox|Exec=/opt/qtox/qtox|" \
-    -i $package_dir/usr/share/applications/qtox.desktop
+    -i $package_dir/usr/share/applications/io.github.qtox.qTox.desktop
 
 # Checksums of package files
 cd $package_dir

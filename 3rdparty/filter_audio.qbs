@@ -9,8 +9,7 @@ Product {
 
     Depends { name: "cpp" }
 
-    //property string version: "0.0.1"
-
+    cpp.archiverName: GccUtl.ar(cpp.toolchainPathPrefix)
     cpp.cFlags: [
         "-Wall",
         "-Wextra",
@@ -18,10 +17,10 @@ Product {
         "-Wno-sign-compare",
     ]
 
-    cpp.archiverName: GccUtl.ar(cpp.toolchainPathPrefix)
-    cpp.systemIncludePaths: [
+    property var exportIncludePaths: [
         "./filter_audio",
     ]
+    cpp.systemIncludePaths: exportIncludePaths;
 
     files: [
         "filter_audio/aec/*.c",
@@ -44,11 +43,11 @@ Product {
         "filter_audio/filter_audio.h",
     ]
     excludeFiles: [
-        "resample_sse.h",
+        "filter_audio/other/resample_sse.h",
     ]
 
     Export {
         Depends { name: "cpp" }
-        cpp.systemIncludePaths: product.cpp.systemIncludePaths
+        cpp.systemIncludePaths: product.exportIncludePaths
     }
 }

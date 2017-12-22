@@ -25,7 +25,7 @@
 #include <QObject>
 #include <atomic>
 #include <memory>
-#include <tox/tox.h> // for TOX_VERSION_IS_API_COMPATIBLE macro
+#include <toxcore/tox.h> // for TOX_VERSION_IS_API_COMPATIBLE macro
 
 class Friend;
 class Group;

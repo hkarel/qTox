@@ -10,21 +10,23 @@ Product {
     Depends { name: "cpp" }
     Depends { name: "lib.sodium" }
 
-    lib.sodium.version: project.sodiumVersion
-    lib.sodium.staticLibraries: ["sodium"]
-    //lib.sodium.dynamicLibraries: ["sodium"]
+    lib.sodium.version:   project.sodiumVersion
+    lib.sodium.useSystem: project.useSystemSodium
 
-     Probe {
-         id: baseProbe
-         property string compilerLibraryPath
-         configure: {
-             lib.sodium.probe();
-             compilerLibraryPath = GccUtl.compilerLibraryPath(cpp.compilerPath);
-         }
-     }
+    Probe {
+        id: baseProbe
+        property string compilerLibraryPath
+        configure: {
+            lib.sodium.probe();
+            compilerLibraryPath = GccUtl.compilerLibraryPath(cpp.compilerPath);
+        }
+    }
 
+    cpp.archiverName: GccUtl.ar(cpp.toolchainPathPrefix)
     cpp.defines: [
         "USE_IPV6=1",
+        "TCP_SERVER_USE_EPOLL",
+        "MIN_LOGGER_LEVEL=2",
     ]
 
     property var warnFlags: [
@@ -87,17 +89,18 @@ Product {
 
     cpp.cFlags: [
         "-std=c99",
+        "-Wno-unused-function",
         "-pedantic", // Warn on non-ISO C.
     ].concat(warnFlags)
 
     cpp.cxxFlags: [
         "-std=c++11",
-        //"-g",
         //"-Wno-unused-parameter",
     ].concat(warnFlags)
 
-    cpp.archiverName: GccUtl.ar(cpp.toolchainPathPrefix)
-
+    property var exportIncludePaths: [
+        "./toxcore",
+    ]
     cpp.systemIncludePaths: QbsUtl.concatPaths([
             "/usr/include/opus",
         ],
@@ -111,23 +114,12 @@ Product {
     )
 
     cpp.libraryPaths: QbsUtl.concatPaths(
-         lib.sodium.libraryPath,
-         project.buildDirectory + "/lib"
+        lib.sodium.libraryPath,
+        project.buildDirectory + "/lib"
     )
 
-//    cpp.dynamicLibraries: QbsUtl.concatPaths([
-//        ],
-//        lib.sodium.dynamicLibraries
-//    )
-
-//    Export {
-//        Depends { name: "cpp" }
-//        cpp.systemIncludePaths: product.cpp.systemIncludePaths
-//    }
-
-//    property var test: {
-//        console.info("=== cpp.systemIncludePaths ===");
-//        console.info(cpp.systemIncludePaths);
-//    }
-
+    Export {
+        Depends { name: "cpp" }
+        cpp.includePaths: product.exportIncludePaths
+    }
 }
