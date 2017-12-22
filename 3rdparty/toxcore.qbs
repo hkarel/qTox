@@ -261,8 +261,6 @@ Project {
         //Depends { name: "ToxNetCrypto" }
         //Depends { name: "ToxDHT" }
 
-        lib.sodium.staticLibraries: ["sodium"]
-
         cpp.dynamicLibraries: [
             "pthread",
         ]

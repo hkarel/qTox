@@ -11,17 +11,15 @@ Product {
     Depends { name: "lib.sodium" }
 
     lib.sodium.version: project.sodiumVersion
-    lib.sodium.staticLibraries: ["sodium"]
-    //lib.sodium.dynamicLibraries: ["sodium"]
 
-     Probe {
-         id: baseProbe
-         property string compilerLibraryPath
-         configure: {
-             lib.sodium.probe();
-             compilerLibraryPath = GccUtl.compilerLibraryPath(cpp.compilerPath);
-         }
-     }
+    Probe {
+        id: baseProbe
+        property string compilerLibraryPath
+        configure: {
+            lib.sodium.probe();
+            compilerLibraryPath = GccUtl.compilerLibraryPath(cpp.compilerPath);
+        }
+    }
 
     cpp.defines: [
         "USE_IPV6=1",

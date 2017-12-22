@@ -17,7 +17,7 @@ Project {
     property string useSmileys: "yes"
 
     property string sodiumVersion: "1.0.16"
-    property string ffmpegVersion: "3.3.3"
+    //property string ffmpegVersion: "3.3.3"
 
     property string osName: osProbe.osName
     property string osVersion: osProbe.osVersion
@@ -115,8 +115,8 @@ Project {
         return def;
     }
 
-    property string cxxLanguageVersion: "c++11"
     property var cxxFlags: [
+        "-std=c++11",
         "-Wall",
         "-Wextra",
         //"-Wno-unused-parameter",

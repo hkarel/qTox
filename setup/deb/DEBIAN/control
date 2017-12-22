@@ -6,8 +6,8 @@ Installed-Size: %INSTALLED_SIZE%
 Depends:  %DEPENDS%
 Section: net
 Priority: standard
-Homepage: https://qtox.github.io
-Description: New Kind of Instant Messaging.
+Homepage: https://tox.chat
+Description: New Kind of Instant Messaging
  Nowadays, every government seems to be interested in what we're saying online.
  qTox is built on a "privacy goes first" agenda, and we make no compromises.
  Your safety is our top priority, and there isn't anything in the world that

@@ -10,12 +10,6 @@ Product {
     consoleApplication: false
     destinationDirectory: "./bin"
 
-    //Group {
-    //    fileTagsFilter: "application"
-    //    qbs.install: true
-    //    qbs.installDir: "bin"
-    //}
-
     property bool platformExtensions: true
 
     Depends { name: "cpp" }
@@ -32,10 +26,10 @@ Product {
 
     lib.sodium.useSystem: false
     lib.sodium.version: project.sodiumVersion
-    lib.sodium.staticLibraries: ["sodium"]
 
     lib.ffmpeg.useSystem: false
-    lib.ffmpeg.version: project.ffmpegVersion
+    lib.ffmpeg.version: (project.osName === "ubuntu"
+                         && project.osVersion === "14.04") ? "3.3.3" : "3.x"
     lib.ffmpeg.staticLibraries: [
         "avdevice",
         "avfilter",
@@ -71,6 +65,13 @@ Product {
                 libFiles.push(Qt.core.libPath + "/libicui18n.so.56");
                 libFiles.push(Qt.core.libPath + "/libicuuc.so.56");
                 libFiles.push(Qt.core.libPath + "/libicudata.so.56");
+
+                // For FFmpeg
+                libFiles.push("/usr/lib/x86_64-linux-gnu/libvidstab.so.1");
+                libFiles.push("/usr/lib/x86_64-linux-gnu/libzimg.so.2");
+                libFiles.push("/usr/lib/x86_64-linux-gnu/libfdk-aac.so.1");
+                libFiles.push("/usr/lib/x86_64-linux-gnu/libx265.so.130");
+
                 for (var i in libFiles)
                     file.writeLine(libFiles[i].replace(/\.so\..*$/, ".so*"));
 
@@ -95,12 +96,9 @@ Product {
         "LOG_TO_FILE",
     ])
 
-    cpp.cxxLanguageVersion: project.cxxLanguageVersion
     cpp.cxxFlags: {
         var flags = project.cxxFlags.concat([
-            //"-Wno-sign-compare",
             "-Wno-unused-parameter",
-            //"-Wno-reorder",
             //"-fno-exceptions",
             "-fno-rtti",
             "-Wstrict-overflow",
@@ -141,8 +139,15 @@ Product {
             "/usr/lib/x86_64-linux-gnu/gtk-2.0/include",
             "/usr/lib/x86_64-linux-gnu/glib-2.0/include",
         ],
-        lib.sodium.includePath,
-        lib.ffmpeg.includePath
+        lib.ffmpeg.includePath,
+        lib.sodium.includePath
+    );
+
+    cpp.rpaths: QbsUtl.concatPaths(
+        productProbe.compilerLibraryPath,
+        "/opt/qtox/lib"
+        //lib.sodium.libraryPath,
+        //"$ORIGIN/../lib/qtox"
     )
 
     cpp.dynamicLibraries: {
@@ -169,67 +174,55 @@ Product {
             libs.push("vpx");
         }
 
+        /* For static linking FFmpeg */
+        libs = libs.concat([
+            "Xext",
+            "Xv",
+            "xcb",
+            "xcb-shm",
+            "xcb-xfixes",
+            "xcb-shape",
+            "asound",
+            "pulse",
+            "pulse-mainloop-glib",
+            "gnutls",
+            "soxr",
+            "vorbis",
+            "vorbisenc",
+            "vdpau",
+            "va",
+            "va-drm",
+            "va-x11",
+            "freetype",
+            "ass",
+            "mlt",
+            "mlt++",
+            "vidstab",
+            "zimg",
+            "aacs",
+            "bz2",
+            "SDL2-2.0",
+            "x264",
+            "x265",
+            "mp3lame",
+            "xvidcore",
+            "speex",
+            "theora",
+            "theoradec",
+            "theoraenc",
+            "opencore-amrnb",
+            "opencore-amrwb",
+            "wavpack",
+            "fdk-aac",
+        ]);
         if (project.osName === "ubuntu"
-            && project.osVersion === "14.04") {
-            /* For static linking FFmpeg */
-            libs = libs.concat([
-                "Xext",
-                "Xv",
-                "xcb",
-                "xcb-shm",
-                "xcb-xfixes",
-                "xcb-shape",
-                "asound",
-                "pulse",
-                "pulse-mainloop-glib",
-                "gnutls",
-                "soxr",
-                "vorbis",
-                "vorbisenc",
-                "vdpau",
-                "va",
-                "va-drm",
-                "va-x11",
-                "freetype",
-                "ass",
-                "mlt",
-                "mlt++",
-                "vidstab",
-                "zimg",
-                "aacs",
-                "bz2",
-                "SDL2-2.0",
-                "x264",
-                "x265",
-                "mp3lame",
-                "xvidcore",
-                "speex",
-                "theora",
-                "theoradec",
-                "theoraenc",
-                "opencore-amrnb",
-                "opencore-amrwb",
-                "wavpack",
-                "fdk-aac",
-            ]);
-        }
-        else {
-            //    // libavdevice-dev
-            //    "avcodec-ffmpeg",
-            //    "avdevice-ffmpeg",
-            //    "avformat-ffmpeg",
-            //    "avutil-ffmpeg",
-            //    "swscale-ffmpeg",
+	        && project.osVersion === "16.04") {
+	        libs.push("sndio");
+	        libs.push("gsm");
+	        libs.push("openjpeg");
         }
         return libs;
     }
-
-    cpp.rpaths: QbsUtl.concatPaths(
-        productProbe.compilerLibraryPath,
-        "/opt/qtox/lib"
-        //lib.sodium.libraryPath,
-        //"$ORIGIN/../lib/qtox"
-    )
 
     cpp.staticLibraries: {
         var libs = QbsUtl.concatPaths(
@@ -241,7 +234,6 @@ Product {
             // Version VPX must be not less than 1.5.0
             libs.push("/usr/lib/x86_64-linux-gnu/libvpx.a");
         }
-
         return libs;
     }
 
