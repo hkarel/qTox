@@ -96,6 +96,7 @@ Product {
         "LOG_TO_FILE",
     ])
 
+    cpp.cxxLanguageVersion: "c++14"
     cpp.cxxFlags: {
         var flags = project.cxxFlags.concat([
             "-Wno-unused-parameter",

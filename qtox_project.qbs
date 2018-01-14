@@ -116,7 +116,7 @@ Project {
     }
 
     property var cxxFlags: [
-        "-std=c++11",
+        //"-std=c++14",
         "-Wall",
         "-Wextra",
         //"-Wno-unused-parameter",
