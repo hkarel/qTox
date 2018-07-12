@@ -255,6 +255,10 @@ set(${PROJECT_NAME}_SOURCES
   src/core/toxfile.h
   src/core/toxid.cpp
   src/core/toxid.h
+  src/core/toxlogger.cpp
+  src/core/toxlogger.h
+  src/core/toxoptions.cpp
+  src/core/toxoptions.h
   src/core/toxpk.cpp
   src/core/toxpk.h
   src/core/toxstring.cpp
@@ -268,6 +272,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/about/aboutfriend.cpp
   src/model/about/aboutfriend.h
   src/model/about/iaboutfriend.h
+  src/model/chatroom/friendchatroom.cpp
+  src/model/chatroom/friendchatroom.h
   src/model/contact.cpp
   src/model/contact.h
   src/model/friend.cpp

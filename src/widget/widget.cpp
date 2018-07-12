@@ -44,7 +44,6 @@
 #include "friendlistwidget.h"
 #include "friendwidget.h"
 #include "groupwidget.h"
-#include "src/model/groupinvite.h"
 #include "maskablepixmapwidget.h"
 #include "splitterrestorer.h"
 #include "systemtrayicon.h"
@@ -52,11 +51,14 @@
 #include "src/audio/audio.h"
 #include "src/core/core.h"
 #include "src/core/coreav.h"
+#include "src/model/chatroom/friendchatroom.h"
 #include "src/model/friend.h"
 #include "src/friendlist.h"
-#include "src/model/group.h"
-#include "src/model/profile/profileinfo.h"
 #include "src/grouplist.h"
+#include "src/model/friend.h"
+#include "src/model/group.h"
+#include "src/model/groupinvite.h"
+#include "src/model/profile/profileinfo.h"
 #include "src/net/autoupdate.h"
 #include "src/nexus.h"
 #include "src/persistence/offlinemsgengine.h"
@@ -983,10 +985,12 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
 
     Friend* newfriend = FriendList::addFriend(friendId, friendPk);
     bool compact = s.getCompactLayout();
-    FriendWidget* widget = new FriendWidget(newfriend, compact);
-    History* history = Nexus::getProfile()->getHistory();
-    ChatForm* friendForm = new ChatForm(newfriend, history);
+    auto chatroom = new FriendChatroom(newfriend);
+    auto widget = new FriendWidget(chatroom, compact);
+    auto history = Nexus::getProfile()->getHistory();
+    auto friendForm = new ChatForm(newfriend, history);
 
+    friendChatrooms[friendId] = chatroom;
     friendWidgets[friendId] = widget;
     chatForms[friendId] = friendForm;
 
@@ -1022,7 +1026,7 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     QPixmap avatar = Nexus::getProfile()->loadAvatar(friendPk);
     if (!avatar.isNull()) {
         friendForm->onAvatarChange(friendId, avatar);
-        widget->onAvatarChange(friendId, avatar);
+        widget->onAvatarChange(friendPk, avatar);
     }
 
     FilterCriteria filter = getFilterCriteria();
@@ -1242,8 +1246,9 @@ void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
         onAddClicked();
     }
 
-    ChatForm* form = chatForms[friendId];
-    FriendWidget* friendWidget = dialog->addFriend(frnd, form);
+    auto form = chatForms[friendId];
+    auto chatroom = friendChatrooms[friendId];
+    FriendWidget* friendWidget = dialog->addFriend(chatroom, form);
 
     friendWidget->setStatusMsg(widget->getStatusMsg());
 
@@ -1253,9 +1258,8 @@ void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
     auto widgetRemoveFriend = static_cast<void (Widget::*)(int)>(&Widget::removeFriend);
 #endif
     connect(friendWidget, &FriendWidget::removeFriend, this, widgetRemoveFriend);
-    connect(friendWidget, &FriendWidget::middleMouseClicked, dialog, [=]() {
-        dialog->removeFriend(friendId);
-    });
+    connect(friendWidget, &FriendWidget::middleMouseClicked, dialog,
+            [=]() { dialog->removeFriend(friendId); });
     connect(friendWidget, &FriendWidget::copyFriendIdToClipboard, this,
             &Widget::copyFriendIdToClipboard);
 
@@ -1265,16 +1269,14 @@ void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
     connect(friendWidget, &FriendWidget::contextMenuCalled, widget,
             [=](QContextMenuEvent* event) { emit widget->contextMenuCalled(event); });
 
-    connect(friendWidget, &FriendWidget::chatroomWidgetClicked,
-            [=](GenericChatroomWidget* w) {
-                Q_UNUSED(w);
-                emit widget->chatroomWidgetClicked(widget);
-            });
-    connect(friendWidget, &FriendWidget::newWindowOpened,
-            [=](GenericChatroomWidget* w) {
-                Q_UNUSED(w);
-                emit widget->newWindowOpened(widget);
-            });
+    connect(friendWidget, &FriendWidget::chatroomWidgetClicked, [=](GenericChatroomWidget* w) {
+        Q_UNUSED(w);
+        emit widget->chatroomWidgetClicked(widget);
+    });
+    connect(friendWidget, &FriendWidget::newWindowOpened, [=](GenericChatroomWidget* w) {
+        Q_UNUSED(w);
+        emit widget->newWindowOpened(widget);
+    });
     // FIXME: emit should be removed
     emit widget->chatroomWidgetClicked(widget);
 
@@ -1284,7 +1286,7 @@ void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
 
     QPixmap avatar = Nexus::getProfile()->loadAvatar(frnd->getPublicKey());
     if (!avatar.isNull()) {
-        friendWidget->onAvatarChange(friendId, avatar);
+        friendWidget->onAvatarChange(frnd->getPublicKey(), avatar);
     }
 }
 
@@ -1308,25 +1310,22 @@ void Widget::addGroupDialog(Group* group, ContentDialog* dialog)
 #endif
     connect(groupWidget, &GroupWidget::removeGroup, this, removeGroup);
     connect(groupWidget, &GroupWidget::chatroomWidgetClicked, chatForm, &GroupChatForm::focusInput);
-    connect(groupWidget, &GroupWidget::middleMouseClicked, dialog, [=]() {
-        dialog->removeGroup(groupId);
-    });
+    connect(groupWidget, &GroupWidget::middleMouseClicked, dialog,
+            [=]() { dialog->removeGroup(groupId); });
     connect(groupWidget, &GroupWidget::chatroomWidgetClicked, chatForm, &ChatForm::focusInput);
 
     // Signal transmission from the created `groupWidget` (which shown in
     // ContentDialog) to the `widget` (which shown in main widget)
     // FIXME: emit should be removed
-    connect(groupWidget, &GroupWidget::chatroomWidgetClicked,
-            [=](GenericChatroomWidget* w) {
-                Q_UNUSED(w);
-                emit widget->chatroomWidgetClicked(widget);
-            });
+    connect(groupWidget, &GroupWidget::chatroomWidgetClicked, [=](GenericChatroomWidget* w) {
+        Q_UNUSED(w);
+        emit widget->chatroomWidgetClicked(widget);
+    });
 
-    connect(groupWidget, &GroupWidget::newWindowOpened,
-            [=](GenericChatroomWidget* w) {
-                Q_UNUSED(w);
-                emit widget->newWindowOpened(widget);
-            });
+    connect(groupWidget, &GroupWidget::newWindowOpened, [=](GenericChatroomWidget* w) {
+        Q_UNUSED(w);
+        emit widget->newWindowOpened(widget);
+    });
 
     // FIXME: emit should be removed
     emit widget->chatroomWidgetClicked(widget);
@@ -1936,9 +1935,7 @@ Group* Widget::createGroup(int groupId)
     auto widgetRemoveGroup = static_cast<void (Widget::*)(int)>(&Widget::removeGroup);
 #endif
     connect(widget, &GroupWidget::removeGroup, this, widgetRemoveGroup);
-    connect(widget, &GroupWidget::middleMouseClicked, this, [=]() {
-        removeGroup(groupId);
-    });
+    connect(widget, &GroupWidget::middleMouseClicked, this, [=]() { removeGroup(groupId); });
     connect(widget, &GroupWidget::chatroomWidgetClicked, form, &ChatForm::focusInput);
     connect(form, &GroupChatForm::sendMessage, core, &Core::sendGroupMessage);
     connect(form, &GroupChatForm::sendAction, core, &Core::sendGroupAction);
@@ -2277,8 +2274,7 @@ inline QIcon Widget::prepareIcon(QString path, int w, int h)
     }
 
     desktop = desktop.toLower();
-    if (desktop == "xfce" || desktop.contains("gnome") || desktop == "mate"
-        || desktop == "x-cinnamon") {
+    if (desktop == "xfce" || desktop.contains("gnome") || desktop == "mate" || desktop == "x-cinnamon") {
         if (w > 0 && h > 0) {
             QSvgRenderer renderer(path);
 
