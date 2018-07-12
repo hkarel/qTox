@@ -1,6 +1,6 @@
 #include "toxlogger.h"
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <QDebug>
 #include <QRegularExpression>

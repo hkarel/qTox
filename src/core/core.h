@@ -25,6 +25,7 @@
 #include "toxid.h"
 
 #include "src/core/dhtserver.h"
+#include <toxcore/tox.h>
 
 #include <QMutex>
 #include <QObject>

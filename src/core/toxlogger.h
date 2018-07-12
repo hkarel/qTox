@@ -1,7 +1,7 @@
 #ifndef TOXLOGGER_H
 #define TOXLOGGER_H
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <cstdint>
 
