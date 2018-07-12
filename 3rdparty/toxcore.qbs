@@ -34,8 +34,12 @@ Project {
         files: [
             toxPrefix + "toxcore/logger.c",
             toxPrefix + "toxcore/logger.h",
+            toxPrefix + "toxcore/mono_time.c",
+            toxPrefix + "toxcore/mono_time.h",
             toxPrefix + "toxcore/network.c",
             toxPrefix + "toxcore/network.h",
+            toxPrefix + "toxcore/state.c",
+            toxPrefix + "toxcore/state.h",
             toxPrefix + "toxcore/util.c",
             toxPrefix + "toxcore/util.h",
         ]
@@ -46,6 +50,8 @@ Project {
         id: toxdht
         name: "ToxDHT"
         targetName: "toxdht"
+
+        Depends { name: "ToxNetwork" }
 
         files: [
             toxPrefix + "toxcore/DHT.c",
@@ -107,6 +113,7 @@ Project {
         targetName: "toxmessenger"
 
         Depends { name: "ToxNetCrypto" }
+        Depends { name: "ToxNetwork" }
         Depends { name: "ToxFriends" }
 
         files: [
@@ -169,48 +176,6 @@ Project {
         ]
     }
 
-//    // :: Audio/Video Library
-//    ToxBase {
-//        id: toxav
-//        name: "ToxAV"
-//        targetName: "toxav"
-
-//        Depends { name: "ToxNetwork" }
-//        Depends { name: "ToxMessenger" }
-
-//        files: [
-//            toxPrefix + "toxav/audio.c",
-//            toxPrefix + "toxav/audio.h",
-//            toxPrefix + "toxav/bwcontroller.c",
-//            toxPrefix + "toxav/bwcontroller.h",
-//            toxPrefix + "toxav/groupav.c",
-//            toxPrefix + "toxav/groupav.h",
-//            toxPrefix + "toxav/msi.c",
-//            toxPrefix + "toxav/msi.h",
-//            toxPrefix + "toxav/ring_buffer.c",
-//            toxPrefix + "toxav/ring_buffer.h",
-//            toxPrefix + "toxav/rtp.c",
-//            toxPrefix + "toxav/rtp.h",
-//            toxPrefix + "toxav/toxav.c",
-//            toxPrefix + "toxav/toxav.h",
-//            toxPrefix + "toxav/toxav_old.c",
-//            toxPrefix + "toxav/video.c",
-//            toxPrefix + "toxav/video.h",
-//        ]
-//    }
-
-//    // :: ToxDNS and block encryption libraries
-//    ToxBase {
-//        id: toxdns
-//        name: "ToxDNS"
-//        targetName: "toxdns"
-//        files: [
-//            toxPrefix + "toxdns/toxdns.c",
-//            toxPrefix + "toxencryptsave/toxencryptsave.c",
-//            toxPrefix + "toxencryptsave/toxencryptsave.h",
-//        ]
-//    }
-
     // :: Bootstrap daemon
     ToxBase {
         id: dht_bootstrap
@@ -236,24 +201,11 @@ Project {
             lib.sodium.dynamicLibraries
         );
 
-        //cpp.dynamicLibraries: [
-        //    "pthread",
-        //]
-
-        //cpp.staticLibraries: QbsUtl.concatPaths(
-        //    lib.sodium.staticLibrariesPaths(product)
-        //)
-
         files: [
             toxPrefix + "other/DHT_bootstrap.c",
             toxPrefix + "other/bootstrap_node_packets.c",
             toxPrefix + "other/bootstrap_node_packets.h",
         ]
-
-//        property var test: {
-//            console.info("=== cpp.defines ===");
-//            console.info(cpp.defines);
-//        }
     }
 
     // :: Bootstrap daemon
@@ -278,15 +230,6 @@ Project {
             lib.sodium.dynamicLibraries
         );
 
-        //cpp.dynamicLibraries: [
-        //    "pthread",
-        //    "config",
-        //]
-
-        //cpp.staticLibraries: QbsUtl.concatPaths(
-        //    lib.sodium.staticLibrariesPaths(product)
-        //)
-
         files: [
             toxPrefix + "other/bootstrap_daemon/src/command_line_arguments.c",
             toxPrefix + "other/bootstrap_daemon/src/command_line_arguments.h",
@@ -305,5 +248,4 @@ Project {
             toxPrefix + "other/bootstrap_node_packets.h",
         ]
     }
-
 }
