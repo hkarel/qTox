@@ -227,7 +227,8 @@ $QBS build \
     --no-install \
     qbs.buildVariant:$build_mode \
     project.printPackegeBuildInfo:true \
-    profile:qtox $build_subdir
+    config:$build_subdir \
+    profile:qtox
 
 if [ "$build_deb_package" != "yes" -a "$install" != "yes" ]; then
     exit 0

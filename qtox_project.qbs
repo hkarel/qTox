@@ -3,7 +3,7 @@ import qbs.File
 import qbs.TextFile
 import qbs.Process
 import "qbs/imports/QbsUtl/qbsutl.js" as QbsUtl
-import "qbs/imports/Probes/OsProbe.qbs" as OsProbe
+import "qbs/imports/ProbExt/OsProbe.qbs" as OsProbe
 
 Project {
     name: "qTox Project"
@@ -38,11 +38,12 @@ Project {
         property string gitDescribe: "Nightly"
         property string timestamp: ""
 
+        readonly property string projectSourceDirectory: project.sourceDirectory
         configure: {
-            gitRevision = QbsUtl.gitRevision(sourceDirectory);
+            gitRevision = QbsUtl.gitRevision(projectSourceDirectory);
             var process = new Process();
             try {
-                process.setWorkingDirectory(sourceDirectory);
+                process.setWorkingDirectory(projectSourceDirectory);
                 if (process.exec("git", ["describe", "--tags"], false) === 0)
                     gitDescribe = process.readLine().trim();
 
