@@ -56,6 +56,7 @@ public:
     };
 
     ChatFormHeader(QWidget* parent = nullptr);
+    ~ChatFormHeader();
 
     void setName(const QString& newName);
     void setMode(Mode mode);
