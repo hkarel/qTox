@@ -107,4 +107,7 @@
         <file>ui/contentDialog/contentDialog.css</file>
         <file>ui/tooliconsZone/tooliconsZone.css</file>
     </qresource>
+    <qresource prefix="/sonnet">
+        <file alias="trigrams.map">res/sonnet/trigrams.map</file>
+    </qresource>
 </RCC>

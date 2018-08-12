@@ -7,3 +7,6 @@
 [submodule "3rdparty/toxcore"]
 	path = 3rdparty/toxcore
 	url = https://github.com/TokTok/c-toxcore.git
+[submodule "3rdparty/sonnet"]
+	path = 3rdparty/sonnet
+	url = https://github.com/hkarel/sonnet.git

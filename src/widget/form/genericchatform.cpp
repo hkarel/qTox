@@ -48,7 +48,7 @@
 #include <QStringBuilder>
 
 #ifdef SPELL_CHECKING
-#include <KF5/SonnetUi/sonnet/spellcheckdecorator.h>
+#include "sonnet/src/ui/spellcheckdecorator.h"
 #endif
 
 /**

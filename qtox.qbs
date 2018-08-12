@@ -23,6 +23,10 @@ Product {
     //Depends { name: "ToxAV" }
     //Depends { name: "ToxDNS" }
     Depends { name: "ToxGroup" }
+    Depends { name: "SonnetCore" }
+    Depends { name: "SonnetGenTrigrams" }
+    Depends { name: "SonnetParseTrigrams" }
+    Depends { name: "SonnetUi" }
     Depends { name: "Qt"; submodules: ["core", "network", "gui", "widgets", "dbus", "svg", "xml"] }
 
     lib.sodium.version:   project.sodiumVersion
@@ -114,6 +118,7 @@ Product {
         "ENABLE_SYSTRAY_GTK_BACKEND",
         "USE_FILTERAUDIO",
         "LOG_TO_FILE",
+        "SPELL_CHECKING",
     ])
 
     cpp.cxxLanguageVersion: "c++14"
@@ -246,6 +251,10 @@ Product {
             libs.push("gsm");
             libs.push("openjp2");
         }
+
+        // Spell checker
+        libs.push("hunspell");
+
         return libs;
     }
 

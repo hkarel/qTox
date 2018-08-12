@@ -4,6 +4,7 @@ Project {
     name: "3rdparty"
     references: [
         "filter_audio.qbs",
+        "sonnet/sonnet.qbs",
         "toxcore.qbs",
     ]
 }
