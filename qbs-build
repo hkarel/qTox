@@ -348,7 +348,7 @@ EOS
 )
 elif [ "$os_id" = "ubuntu" -a "$os_ver" = "16.04" ]; then
   packet_depends1=$(cat << EOS
-    libvpx3,libgnutls30,libsndio6.1,libgsm1,libopenjp2-7,libatk-adaptor,libgail-common
+    libgnutls30,libsndio6.1,libgsm1,libopenjp2-7,libatk-adaptor,libgail-common
 EOS
 )
 else

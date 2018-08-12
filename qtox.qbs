@@ -196,9 +196,9 @@ Product {
             lib.sodium.dynamicLibraries
         );
 
-        if (!(project.osName === "ubuntu" && project.osVersion === "14.04")) {
-            libs.push("vpx");
-        }
+        //if (!(project.osName === "ubuntu" && project.osVersion === "14.04")) {
+        //    libs.push("vpx");
+        //}
 
         /* For static linking FFmpeg */
         libs = libs.concat([
@@ -254,11 +254,15 @@ Product {
             //lib.sodium.staticLibrariesPaths(product),
             lib.ffmpeg.staticLibrariesPaths(product)
         );
-        if (project.osName === "ubuntu"
-            && project.osVersion === "14.04") {
-            // Version VPX must be not less than 1.5.0
-            libs.push("/usr/lib/x86_64-linux-gnu/libvpx.a");
-        }
+        //if (project.osName === "ubuntu"
+        //    && project.osVersion === "14.04") {
+        //    // Version VPX must be not less than 1.5.0
+        //    libs.push("/usr/lib/x86_64-linux-gnu/libvpx.a");
+        //}
+
+        // Version VPX must be not less than 1.5.0
+        libs.push("/usr/lib/x86_64-linux-gnu/libvpx.a");
+
         return libs;
     }
 
