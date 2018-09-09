@@ -170,6 +170,9 @@ Follow steps for adding translations from Weblate up to step 5. Next:
 - Update version number for windows/osx packages using the
   [`./tools/update-versions.sh`] script, e.g. `./tools/update-versions.sh
   1.11.0`
+- Update toxcore version number to the latest tag. Currently this needs to be
+  done manually by `grep`ing for the current tag.
+- Update the bootstrap nodelist using the [`./tools/update-nodelist.py`] script.
 - Generate changelog with `clog`.
   - In a `MAJOR`/`MINOR` release tag should include information that changelog
     is located in the `CHANGELOG.md` file, e.g. `For details see CHANGELOG.md`
@@ -183,12 +186,13 @@ Follow steps for adding translations from Weblate up to step 5. Next:
 
 ### After tagging
 
-- Create and GPG-sign tarball using [`./tools/create-tarball.sh`] script, and
-  upload the tarball to the github release that was created by a Travis OSX
+- Create and GPG-sign the tar.lz and tar.gz archives using
+  [`./tools/create-tarballs.sh`] script, and upload both archives plus both
+  signature files to the github release that was created by a Travis OSX
   release job.
 - Update download links on https://tox.chat to point to the new release.
-- Write a short blog post for https://github.com/qTox/blog/ and advertise the post
-  on Tox IRC channels, popular Tox groups, reddit, or whatever other platforms.
+- Write a short blog post for https://github.com/qTox/blog/ and advertise the
+  post on Tox IRC channels, popular Tox groups, reddit, or whatever other platforms.
 - Open a PR to update the Flatpak manifest of our [Flathub repository] with the 
   changes from [`./flatpak/io.github.qtox.qTox.json`].
 - Comment to the PR with `bot, build` to execute a test build

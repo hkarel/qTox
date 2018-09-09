@@ -502,7 +502,38 @@ void ChatForm::onVolMuteToggle()
     updateMuteVolButton();
 }
 
-void ChatForm::onSearchUp(const QString& phrase)
+void ChatForm::searchInBegin(const QString& phrase, const ParameterSearch& parameter)
+{
+    disableSearchText();
+
+    searchPoint = QPoint(1, -1);
+
+    const bool isFirst = (parameter.period == PeriodSearch::WithTheFirst);
+    const bool isAfter = (parameter.period == PeriodSearch::AfterDate);
+    if (isFirst || isAfter) {
+        if (isFirst || (isAfter && parameter.date < getFirstDate())) {
+            const QString pk = f->getPublicKey().toString();
+            if ((isFirst || parameter.date >= history->getStartDateChatHistory(pk).date()) &&
+                    loadHistory(phrase, parameter)) {
+
+                return;
+            }
+        }
+
+        onSearchDown(phrase, parameter);
+    } else {
+        if (parameter.period == PeriodSearch::BeforeDate && parameter.date < getFirstDate()) {
+            const QString pk = f->getPublicKey().toString();
+            if (parameter.date >= history->getStartDateChatHistory(pk).date() && loadHistory(phrase, parameter)) {
+                return;
+            }
+        }
+
+        onSearchUp(phrase, parameter);
+    }
+}
+
+void ChatForm::onSearchUp(const QString& phrase, const ParameterSearch& parameter)
 {
     if (phrase.isEmpty()) {
         disableSearchText();
@@ -511,29 +542,27 @@ void ChatForm::onSearchUp(const QString& phrase)
     QVector<ChatLine::Ptr> lines = chatWidget->getLines();
     int numLines = lines.size();
 
-    int startLine = numLines - searchPoint.x();
+    int startLine;
 
-    if (startLine == 0) {
-        QString pk = f->getPublicKey().toString();
-        QDateTime newBaseDate = history->getDateWhereFindPhrase(pk, earliestMessage, phrase);
+    if (searchAfterLoadHistory) {
+        startLine = 1;
+        searchAfterLoadHistory = false;
+    } else {
+        startLine = numLines - searchPoint.x();
+    }
 
-        if (!newBaseDate.isValid()) {
-            return;
-        }
-
-        searchAfterLoadHistory = true;
-        loadHistoryByDateRange(newBaseDate);
-
+    if (startLine == 0 && loadHistory(phrase, parameter)) {
         return;
     }
 
-    bool isSearch = searchInText(phrase, true);
+    const bool isSearch = searchInText(phrase, parameter, SearchDirection::Up);
 
     if (!isSearch) {
-        QString pk = f->getPublicKey().toString();
-        QDateTime newBaseDate = history->getDateWhereFindPhrase(pk, earliestMessage, phrase);
+        const QString pk = f->getPublicKey().toString();
+        const QDateTime newBaseDate = history->getDateWhereFindPhrase(pk, earliestMessage, phrase, parameter);
 
         if (!newBaseDate.isValid()) {
+            emit messageNotFoundShow(SearchDirection::Up);
             return;
         }
 
@@ -543,9 +572,11 @@ void ChatForm::onSearchUp(const QString& phrase)
     }
 }
 
-void ChatForm::onSearchDown(const QString& phrase)
+void ChatForm::onSearchDown(const QString& phrase, const ParameterSearch& parameter)
 {
-    searchInText(phrase, false);
+    if (!searchInText(phrase, parameter, SearchDirection::Down)) {
+        emit messageNotFoundShow(SearchDirection::Down);
+    }
 }
 
 void ChatForm::onFileSendFailed(uint32_t friendId, const QString& fname)
@@ -728,10 +759,10 @@ QString getMsgAuthorDispName(const ToxPk& authorPk, const QString& dispName)
 
 void ChatForm::loadHistoryDefaultNum(bool processUndelivered)
 {
-    QString pk = f->getPublicKey().toString();
+    const QString pk = f->getPublicKey().toString();
     QList<History::HistMessage> msgs = history->getChatHistoryDefaultNum(pk);
     if (!msgs.isEmpty()) {
-        earliestMessage = msgs.back().timestamp;
+        earliestMessage = msgs.first().timestamp;
     }
     handleLoadedMessages(msgs, processUndelivered);
 }
@@ -840,11 +871,15 @@ void ChatForm::sendLoadedMessage(ChatMessage::Ptr chatMsg, MessageMetadata const
     if (!metadata.needSending) {
         return;
     }
-    Core* core = Core::getInstance();
-    uint32_t friendId = f->getId();
-    QString stringMsg = chatMsg->toString();
-    int receipt = metadata.isAction ? core->sendAction(friendId, stringMsg)
+
+    int receipt = 0;
+    if (f->getStatus() != Status::Offline) {
+        Core* core = Core::getInstance();
+        uint32_t friendId = f->getId();
+        QString stringMsg = chatMsg->toString();
+        receipt = metadata.isAction ? core->sendAction(friendId, stringMsg)
                                     : core->sendMessage(friendId, stringMsg);
+    }
     getOfflineMsgEngine()->registerReceipt(receipt, metadata.id, chatMsg);
 }
 
@@ -1028,18 +1063,22 @@ void ChatForm::SendMessageStr(QString msg)
             historyPart = ACTION_PREFIX + part;
         }
 
-        bool status = !Settings::getInstance().getFauxOfflineMessaging();
-        ChatMessage::Ptr ma = createSelfMessage(part, timestamp, isAction, false);
-        Core* core = Core::getInstance();
-        uint32_t friendId = f->getId();
-        int rec = isAction ? core->sendAction(friendId, part) : core->sendMessage(friendId, part);
+        int rec = 0;
+        if (f->getStatus() != Status::Offline) {
+            Core* core = Core::getInstance();
+            uint32_t friendId = f->getId();
+            rec = isAction ? core->sendAction(friendId, part) : core->sendMessage(friendId, part);
+        }
 
+        ChatMessage::Ptr ma = createSelfMessage(part, timestamp, isAction, false);
+        
         if (history && Settings::getInstance().getEnableLogging()) {
             auto* offMsgEngine = getOfflineMsgEngine();
             QString selfPk = Core::getInstance()->getSelfId().toString();
             QString pk = f->getPublicKey().toString();
             QString name = Core::getInstance()->getUsername();
-            history->addNewMessage(pk, historyPart, selfPk, timestamp, status, name,
+            bool isSent = !Settings::getInstance().getFauxOfflineMessaging();
+            history->addNewMessage(pk, historyPart, selfPk, timestamp, isSent, name,
                                    [offMsgEngine, rec, ma](int64_t id) {
                                        offMsgEngine->registerReceipt(rec, id, ma);
                                    });
@@ -1052,6 +1091,21 @@ void ChatForm::SendMessageStr(QString msg)
         msgEdit->setLastMessage(msg);
         Widget::getInstance()->updateFriendActivity(f);
     }
+}
+
+bool ChatForm::loadHistory(const QString& phrase, const ParameterSearch& parameter)
+{
+    const QString pk = f->getPublicKey().toString();
+    const QDateTime newBaseDate = history->getDateWhereFindPhrase(pk, earliestMessage, phrase, parameter);
+
+    if (newBaseDate.isValid() && getFirstDate().isValid() && newBaseDate.date() < getFirstDate()) {
+        searchAfterLoadHistory = true;
+        loadHistoryByDateRange(newBaseDate);
+
+        return true;
+    }
+
+    return false;
 }
 
 void ChatForm::retranslateUi()
