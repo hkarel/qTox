@@ -377,7 +377,7 @@ bool OpenAL::initOutput(const QString& deviceName)
 }
 
 /**
- * @brief Play a 44100Hz mono 16bit PCM sound from a file
+ * @brief Play a 48kHz mono 16bit PCM sound from a file
  *
  * @param[in] path the path to the sound file
  */
@@ -389,7 +389,7 @@ void OpenAL::playMono16Sound(const QString& path)
 }
 
 /**
- * @brief Play a 44100Hz mono 16bit PCM sound
+ * @brief Play a 48kHz mono 16bit PCM sound
  */
 void OpenAL::playMono16Sound(const QByteArray& data)
 {
@@ -408,11 +408,11 @@ void OpenAL::playMono16Sound(const QByteArray& data)
         alSourcei(alMainSource, AL_BUFFER, AL_NONE);
     }
 
-    alBufferData(alMainBuffer, AL_FORMAT_MONO16, data.constData(), data.size(), 44100);
+    alBufferData(alMainBuffer, AL_FORMAT_MONO16, data.constData(), data.size(), AUDIO_SAMPLE_RATE);
     alSourcei(alMainSource, AL_BUFFER, static_cast<ALint>(alMainBuffer));
     alSourcePlay(alMainSource);
 
-    int durationMs = data.size() * 1000 / 2 / 44100;
+    int durationMs = data.size() * 1000 / 2 / AUDIO_SAMPLE_RATE;
     QMetaObject::invokeMethod(&playMono16Timer, "start", Q_ARG(int, durationMs + 50));
 }
 
@@ -633,9 +633,9 @@ bool OpenAL::isOutputReady() const
 QStringList OpenAL::outDeviceNames()
 {
     QStringList list;
-    const ALchar* pDeviceList = (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT") != AL_FALSE)
-                                    ? alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER)
-                                    : alcGetString(NULL, ALC_DEVICE_SPECIFIER);
+    const ALchar* pDeviceList = (alcIsExtensionPresent(nullptr, "ALC_ENUMERATE_ALL_EXT") != AL_FALSE)
+                                    ? alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER)
+                                    : alcGetString(nullptr, ALC_DEVICE_SPECIFIER);
 
     if (pDeviceList) {
         while (*pDeviceList) {
@@ -651,7 +651,7 @@ QStringList OpenAL::outDeviceNames()
 QStringList OpenAL::inDeviceNames()
 {
     QStringList list;
-    const ALchar* pDeviceList = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
+    const ALchar* pDeviceList = alcGetString(nullptr, ALC_CAPTURE_DEVICE_SPECIFIER);
 
     if (pDeviceList) {
         while (*pDeviceList) {
