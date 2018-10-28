@@ -70,6 +70,7 @@ FriendWidget::FriendWidget(std::shared_ptr<FriendChatroom> chatroom, bool compac
     connect(nameLabel, &CroppingLabel::editFinished, frnd, &Friend::setAlias);
     // update on changes of the displayed name
     connect(frnd, &Friend::displayedNameChanged, nameLabel, &CroppingLabel::setText);
+    connect(frnd, &Friend::displayedNameChanged, [this](const QString /* &newName */){emit friendWidgetRenamed(this);});
     connect(chatroom.get(), &FriendChatroom::activeChanged, this, &FriendWidget::setActive);
     statusMessageLabel->setTextFormat(Qt::PlainText);
 }
@@ -294,6 +295,7 @@ void FriendWidget::showDetails()
     const auto iabout = new AboutFriend(frnd, &Settings::getInstance());
     std::unique_ptr<IAboutFriend> about = std::unique_ptr<IAboutFriend>(iabout);
     const auto aboutUser = new AboutFriendForm(std::move(about), Widget::getInstance());
+    connect(aboutUser, &AboutFriendForm::histroyRemoved, this, &FriendWidget::friendHistoryRemoved);
     aboutUser->show();
 }
 

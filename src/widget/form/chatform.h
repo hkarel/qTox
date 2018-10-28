@@ -74,6 +74,7 @@ public slots:
     void onAvEnd(uint32_t friendId, bool error);
     void onAvatarChanged(const ToxPk &friendPk, const QPixmap& pic);
     void onFileNameChanged(const ToxPk& friendPk);
+    void clearChatArea();
 
 protected slots:
     void searchInBegin(const QString& phrase, const ParameterSearch& parameter) override;
@@ -81,7 +82,6 @@ protected slots:
     void onSearchDown(const QString& phrase, const ParameterSearch& parameter) override;
 
 private slots:
-    void clearChatArea(bool notInForm) override final;
     void onSendTriggered() override;
     void onAttachClicked() override;
     void onScreenshotClicked() override;
@@ -128,7 +128,7 @@ private:
         {}
     };
     void handleLoadedMessages(QList<History::HistMessage> newHistMsgs, bool processUndelivered);
-    QDate addDateLineIfNeeded(QList<ChatLine::Ptr> msgs, QDate const& lastDate,
+    QDate addDateLineIfNeeded(QList<ChatLine::Ptr>& msgs, QDate const& lastDate,
                               History::HistMessage const& newMessage, MessageMetadata const& metadata);
     MessageMetadata getMessageMetadata(History::HistMessage const& histMessage);
     ChatMessage::Ptr chatMessageFromHistMessage(History::HistMessage const& histMessage,

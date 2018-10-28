@@ -29,8 +29,8 @@ Week of Testing: Your mana regenerates!" />
 ---
 
 <p align="center"><b>
-qTox is a powerful Tox client that follows the Tox design guidelines
-while running on all major platforms.
+qTox is a chat, voice, video, and file transfer instant messaging client using
+the encrypted peer-to-peer Tox protocol.
 </b></p>
 
  **[User Manual] |**
@@ -47,7 +47,7 @@ Windows | Linux | OS X | FreeBSD
 --------|-------|------|--------
 **[64 bit release]**| **[Arch]**, **[Fedora]**, **[Gentoo]**, **[openSUSE]** | **[Latest release]**  | **[Package & Port]**
 [32 bit release]|**[AppImage]**, [Flatpak] | [Building instructions] |
-[64 bit][64nightly], [32 bit][32nightly] nigthly | [From Source] | |
+[64 bit][64nightly], [32 bit][32nightly] nightly | [From Source] | |
 
 _**Bold** options are recommended._
 

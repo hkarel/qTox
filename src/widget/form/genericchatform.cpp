@@ -58,8 +58,6 @@
  * elements and methods to work with chat messages.
  */
 
-#define SET_STYLESHEET(x) (x)->setStyleSheet(Style::getStylesheet(":/ui/" #x "/" #x ".css"))
-
 static const QSize FILE_FLYOUT_SIZE{24, 24};
 static const short FOOT_BUTTONS_SPACING = 2;
 static const short MESSAGE_EDIT_HEIGHT = 50;
@@ -108,7 +106,7 @@ QString GenericChatForm::resolveToxPk(const ToxPk& pk)
 
 namespace
 {
-const QString STYLE_PATH = QStringLiteral(":/ui/chatForm/buttons.css");
+const QString STYLE_PATH = QStringLiteral("chatForm/buttons.css");
 }
 
 namespace
@@ -170,7 +168,7 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
     fileLayout->setSpacing(0);
     fileLayout->setMargin(0);
 
-    msgEdit->setStyleSheet(Style::getStylesheet(":/ui/msgEdit/msgEdit.css")
+    msgEdit->setStyleSheet(Style::getStylesheet("msgEdit/msgEdit.css")
                            + fontToCss(s.getChatMessageFont(), "QTextEdit"));
     msgEdit->setFixedHeight(MESSAGE_EDIT_HEIGHT);
     msgEdit->setFrameStyle(QFrame::NoFrame);
@@ -220,7 +218,7 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
     saveChatAction = menu.addAction(QIcon::fromTheme("document-save"), QString(),
                                     this, SLOT(onSaveLogClicked()));
     clearAction = menu.addAction(QIcon::fromTheme("edit-clear"), QString(),
-                                 this, SLOT(clearChatArea(bool)),
+                                 this, SLOT(clearChatArea()),
                                  QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_L));
     addAction(clearAction);
 
@@ -238,8 +236,8 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
 
     connect(chatWidget, &ChatLog::workerTimeoutFinished, this, &GenericChatForm::onContinueSearch);
 
-    chatWidget->setStyleSheet(Style::getStylesheet(":/ui/chatArea/chatArea.css"));
-    headWidget->setStyleSheet(Style::getStylesheet(":/ui/chatArea/chatHead.css"));
+    chatWidget->setStyleSheet(Style::getStylesheet("chatArea/chatArea.css"));
+    headWidget->setStyleSheet(Style::getStylesheet("chatArea/chatHead.css"));
 
     fileFlyout->setFixedSize(FILE_FLYOUT_SIZE);
     fileFlyout->setParent(this);
@@ -523,7 +521,7 @@ void GenericChatForm::onChatMessageFontChanged(const QFont& font)
     chatWidget->fontChanged(font);
     chatWidget->forceRelayout();
     // message editor
-    msgEdit->setStyleSheet(Style::getStylesheet(":/ui/msgEdit/msgEdit.css")
+    msgEdit->setStyleSheet(Style::getStylesheet("msgEdit/msgEdit.css")
                            + fontToCss(font, "QTextEdit"));
 }
 
@@ -816,27 +814,28 @@ std::pair<int, int> GenericChatForm::indexForSearchInLine(const QString& txt, co
 
 void GenericChatForm::clearChatArea()
 {
-    clearChatArea(true);
+    clearChatArea(/* confirm = */ true, /* inform = */ true);
 }
 
-void GenericChatForm::clearChatArea(bool notinform)
+void GenericChatForm::clearChatArea(bool confirm, bool inform)
 {
-    QMessageBox::StandardButton mboxResult =
-        QMessageBox::question(this, tr("Confirmation"),
-                              tr("You are sure that you want to clear all displayed messages?"),
-                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (mboxResult == QMessageBox::No) {
-        return;
+    if (confirm) {
+        QMessageBox::StandardButton mboxResult =
+                QMessageBox::question(this, tr("Confirmation"),
+                                      tr("You are sure that you want to clear all displayed messages?"),
+                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (mboxResult == QMessageBox::No) {
+            return;
+        }
     }
+
     chatWidget->clear();
     previousId = ToxPk();
 
-    if (!notinform)
+    if (inform)
         addSystemInfoMessage(tr("Cleared"), ChatMessage::INFO, QDateTime::currentDateTime());
 
     earliestMessage = QDateTime(); // null
-
-    emit chatAreaCleared();
 }
 
 void GenericChatForm::onSelectAllClicked()

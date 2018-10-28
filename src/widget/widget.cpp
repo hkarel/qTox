@@ -142,17 +142,17 @@ void Widget::init()
     actionQuit->setMenuRole(QAction::QuitRole);
 #endif
 
-    actionQuit->setIcon(prepareIcon(":/ui/rejectCall/rejectCall.svg", icon_size, icon_size));
+    actionQuit->setIcon(prepareIcon(Style::getImagePath("rejectCall/rejectCall.svg"), icon_size, icon_size));
     connect(actionQuit, &QAction::triggered, qApp, &QApplication::quit);
 
     layout()->setContentsMargins(0, 0, 0, 0);
-    ui->friendList->setStyleSheet(Style::getStylesheet(":/ui/friendList/friendList.css"));
+    ui->friendList->setStyleSheet(Style::getStylesheet("friendList/friendList.css"));
 
     profilePicture = new MaskablePixmapWidget(this, QSize(40, 40), ":/img/avatar_mask.svg");
     profilePicture->setPixmap(QPixmap(":/img/contact_dark.svg"));
     profilePicture->setClickable(true);
     profilePicture->setObjectName("selfAvatar");
-    profilePicture->setStyleSheet(Style::getStylesheet(":ui/window/profile.css"));
+    profilePicture->setStyleSheet(Style::getStylesheet("window/profile.css"));
     ui->myProfile->insertWidget(0, profilePicture);
     ui->myProfile->insertSpacing(1, 7);
 
@@ -196,7 +196,7 @@ void Widget::init()
     ui->searchContactFilterBox->setMenu(filterMenu);
 
 #ifndef Q_OS_MAC
-    ui->statusHead->setStyleSheet(Style::getStylesheet(":/ui/window/statusPanel.css"));
+    ui->statusHead->setStyleSheet(Style::getStylesheet("window/statusPanel.css"));
 #endif
 
     contactListWidget = new FriendListWidget(this, Settings::getInstance().getGroupchatPosition());
@@ -206,7 +206,7 @@ void Widget::init()
 
     ui->statusLabel->setEditable(true);
 
-    ui->statusPanel->setStyleSheet(Style::getStylesheet(":/ui/window/statusPanel.css"));
+    ui->statusPanel->setStyleSheet(Style::getStylesheet("window/statusPanel.css"));
 
     QMenu* statusButtonMenu = new QMenu(ui->statusButton);
     statusButtonMenu->addAction(statusOnline);
@@ -1015,6 +1015,7 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     connect(widget, &FriendWidget::newWindowOpened, this, &Widget::openNewDialog);
     connect(widget, &FriendWidget::chatroomWidgetClicked, this, &Widget::onChatroomWidgetClicked);
     connect(widget, &FriendWidget::chatroomWidgetClicked, friendForm, &ChatForm::focusInput);
+    connect(widget, &FriendWidget::friendHistoryRemoved, friendForm, &ChatForm::clearChatArea);
     connect(widget, &FriendWidget::copyFriendIdToClipboard, this, &Widget::copyFriendIdToClipboard);
     connect(widget, &FriendWidget::contextMenuCalled, widget, &FriendWidget::onContextMenuCalled);
     connect(widget, SIGNAL(removeFriend(int)), this, SLOT(removeFriend(int)));
@@ -1760,7 +1761,6 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
 
 void Widget::onGroupPeerlistChanged(int groupnumber)
 {
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
     Group* g = GroupList::findGroup(groupnumber);
     if (!g) {
         qDebug() << "onGroupNamelistChanged: Group " << groupnumber << " not found, creating it";
@@ -1770,12 +1770,10 @@ void Widget::onGroupPeerlistChanged(int groupnumber)
         }
     }
     g->regeneratePeerList();
-#endif
 }
 
 void Widget::onGroupPeerNameChanged(int groupnumber, int peernumber, const QString& newName)
 {
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
     Group* g = GroupList::findGroup(groupnumber);
     if (!g) {
         qDebug() << "onGroupNamelistChanged: Group " << groupnumber << " not found, creating it";
@@ -1791,40 +1789,6 @@ void Widget::onGroupPeerNameChanged(int groupnumber, int peernumber, const QStri
     }
 
     g->updatePeer(peernumber, setName);
-#endif
-}
-
-/**
- * @deprecated Remove after dropping support for toxcore 0.1.x
- */
-void Widget::onGroupNamelistChangedOld(int groupnumber, int peernumber, uint8_t Change)
-{
-#if !(TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0))
-    Group* g = GroupList::findGroup(groupnumber);
-    if (!g) {
-        qDebug() << "onGroupNamelistChanged: Group " << groupnumber << " not found, creating it";
-        g = createGroup(groupnumber);
-        if (!g) {
-            return;
-        }
-    }
-
-    TOX_CONFERENCE_STATE_CHANGE change = static_cast<TOX_CONFERENCE_STATE_CHANGE>(Change);
-    if (change == TOX_CONFERENCE_STATE_CHANGE_PEER_JOIN) {
-        g->regeneratePeerList();
-    } else if (change == TOX_CONFERENCE_STATE_CHANGE_PEER_EXIT) {
-        g->regeneratePeerList();
-    } else if (change == TOX_CONFERENCE_STATE_CHANGE_PEER_NAME_CHANGE) // core overwrites old name
-                                                                       // before telling us it
-                                                                       // changed...
-    {
-        QString name = Nexus::getCore()->getGroupPeerName(groupnumber, peernumber);
-        if (name.isEmpty())
-            name = tr("<Empty>", "Placeholder when someone's name in a group chat is empty");
-
-        g->updatePeer(peernumber, name);
-    }
-#endif
 }
 
 void Widget::onGroupTitleChanged(int groupnumber, const QString& author, const QString& title)
@@ -1911,9 +1875,8 @@ Group* Widget::createGroup(int groupId)
 
     const auto groupName = tr("Groupchat #%1").arg(groupId);
     Core* core = Nexus::getCore();
-    CoreAV* coreAv = core->getAv();
 
-    bool enabled = coreAv->isGroupAvEnabled(groupId);
+    bool enabled = core->getGroupAvEnabled(groupId);
     Group* newgroup = GroupList::addGroup(groupId, groupName, enabled, core->getUsername());
     std::shared_ptr<GroupChatroom> chatroom(new GroupChatroom(newgroup));
     const auto compact = Settings::getInstance().getCompactLayout();
@@ -2216,13 +2179,13 @@ void Widget::clearAllReceipts()
 
 void Widget::reloadTheme()
 {
-    this->setStyleSheet(Style::getStylesheet(":/ui/window/general.css"));
-    QString statusPanelStyle = Style::getStylesheet(":/ui/window/statusPanel.css");
-    ui->tooliconsZone->setStyleSheet(Style::getStylesheet(":/ui/tooliconsZone/tooliconsZone.css"));
+    this->setStyleSheet(Style::getStylesheet("window/general.css"));
+    QString statusPanelStyle = Style::getStylesheet("window/statusPanel.css");
+    ui->tooliconsZone->setStyleSheet(Style::getStylesheet("tooliconsZone/tooliconsZone.css"));
     ui->statusPanel->setStyleSheet(statusPanelStyle);
     ui->statusHead->setStyleSheet(statusPanelStyle);
-    ui->friendList->setStyleSheet(Style::getStylesheet(":/ui/friendList/friendList.css"));
-    ui->statusButton->setStyleSheet(Style::getStylesheet(":/ui/statusButton/statusButton.css"));
+    ui->friendList->setStyleSheet(Style::getStylesheet("friendList/friendList.css"));
+    ui->statusButton->setStyleSheet(Style::getStylesheet("statusButton/statusButton.css"));
     contactListWidget->reDraw();
 
     for (Friend* f : FriendList::getAllFriends()) {

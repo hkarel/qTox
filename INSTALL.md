@@ -510,6 +510,10 @@ git checkout v0.2.7
 cmake .
 make -j$(nproc)
 sudo make install
+
+# we don't know what whether user runs 64 or 32 bits, and on some distros
+# (Fedora, openSUSE) lib/ doesn't link to lib64/, so add both
+echo '/usr/local/lib64/' | sudo tee -a /etc/ld.so.conf.d/locallib.conf
 echo '/usr/local/lib/' | sudo tee -a /etc/ld.so.conf.d/locallib.conf
 sudo ldconfig
 ```
@@ -524,6 +528,9 @@ If you are compiling on Fedora 25, you must add libtoxcore to the
 `PKG_CONFIG_PATH` environment variable manually:
 
 ```
+# we don't know what whether user runs 64 or 32 bits, and on some distros
+# (Fedora, openSUSE) lib/ doesn't link to lib64/, so add both
+export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/lib64/pkgconfig"
 export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/lib/pkgconfig"
 ```
 
@@ -572,11 +579,10 @@ password for sudo.
 
 ## OS X
 
-Supported OS X versions: >=10.8.
+Supported OS X versions: >=10.8. (NOTE: only 10.12 is tested during CI)
 
-Compiling qTox on OS X for development requires 3 tools:
-[Xcode](https://developer.apple.com/xcode/),
-[Qt 5.4+](https://www.qt.io/qt5-4/) and [homebrew](https://brew.sh).
+Compiling qTox on OS X for development requires 2 tools:
+[Xcode](https://developer.apple.com/xcode/) and [homebrew](https://brew.sh).
 
 ### Automated Script
 

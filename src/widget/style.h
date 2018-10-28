@@ -60,6 +60,9 @@ public:
 
     static QStringList getThemeColorNames();
     static const QString getStylesheet(const QString& filename, const QFont& baseFont = QFont());
+    static const QString getImagePath(const QString& filename);
+    static QString getThemeFolder();
+    static QString getThemeName();
     static QColor getColor(ColorPalette entry);
     static QFont getFont(Font font);
     static const QString resolve(const QString& filename, const QFont& baseFont = QFont());
@@ -69,14 +72,15 @@ public:
     static void applyTheme();
     static QPixmap scaleSvgImage(const QString& path, uint32_t width, uint32_t height);
 
-    static QList<QColor> themeColorColors;
-    static std::map<std::pair<const QString, const QFont>, const QString> stylesheetsCache;
-
 signals:
     void themeChanged();
 
 private:
     Style();
+
+private:
+    static QList<QColor> themeColorColors;
+    static std::map<std::pair<const QString, const QFont>, const QString> stylesheetsCache;
 };
 
 #endif // STYLE_H

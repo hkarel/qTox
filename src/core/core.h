@@ -81,6 +81,7 @@ public:
     QString getGroupPeerName(int groupId, int peerId) const;
     ToxPk getGroupPeerPk(int groupId, int peerId) const;
     QStringList getGroupPeerNames(int groupId) const;
+    bool getGroupAvEnabled(int groupId) const;
     ToxPk getFriendPublicKey(uint32_t friendNumber) const;
     QString getFriendUsername(uint32_t friendNumber) const;
 
@@ -228,14 +229,9 @@ private:
                               const uint8_t* cookie, size_t length, void* vCore);
     static void onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Message_Type type,
                                const uint8_t* cMessage, size_t length, void* vCore);
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
     static void onGroupPeerListChange(Tox*, uint32_t groupId, void* core);
     static void onGroupPeerNameChange(Tox*, uint32_t groupId, uint32_t peerId, const uint8_t* name,
                                       size_t length, void* core);
-#else
-    static void onGroupNamelistChange(Tox* tox, uint32_t groupId, uint32_t peerId,
-                                      TOX_CONFERENCE_STATE_CHANGE change, void* core);
-#endif
     static void onGroupTitleChange(Tox* tox, uint32_t groupId, uint32_t peerId,
                                    const uint8_t* cTitle, size_t length, void* vCore);
     static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core);
@@ -273,7 +269,7 @@ private:
     ToxPtr tox;
 
     std::unique_ptr<CoreAV> av;
-    QTimer toxTimer;
+    QTimer* toxTimer = nullptr;
     // recursive, since we might call our own functions
     // pointer so we can circumvent const functions
     std::unique_ptr<QMutex> coreLoopLock = nullptr;

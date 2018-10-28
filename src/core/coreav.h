@@ -25,17 +25,16 @@
 #include <QObject>
 #include <atomic>
 #include <memory>
-#include <toxcore/tox.h> // for TOX_VERSION_IS_API_COMPATIBLE macro
 
 class Friend;
 class Group;
-class QTimer;
 class QThread;
+class QTimer;
 class CoreVideoSource;
 class CameraSource;
 class VideoSource;
 class VideoFrame;
-class CoreAV;
+class Core;
 struct vpx_image;
 
 class CoreAV : public QObject
@@ -43,10 +42,11 @@ class CoreAV : public QObject
     Q_OBJECT
 
 public:
-    explicit CoreAV(Tox* tox);
-    ~CoreAV();
 
-    const ToxAV* getToxAv() const;
+    using CoreAVPtr = std::unique_ptr<CoreAV>;
+    static CoreAVPtr makeCoreAV(Tox* core);
+
+    ~CoreAV();
 
     bool anyActiveCalls() const;
     bool isCallStarted(const Friend* f) const;
@@ -70,20 +70,14 @@ public:
     void muteCallOutput(const Group* g, bool mute);
     bool isGroupCallInputMuted(const Group* g) const;
     bool isGroupCallOutputMuted(const Group* g) const;
-    bool isGroupAvEnabled(int groupNum) const;
 
     bool isCallInputMuted(const Friend* f) const;
     bool isCallOutputMuted(const Friend* f) const;
     void toggleMuteCallInput(const Friend* f);
     void toggleMuteCallOutput(const Friend* f);
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
     static void groupCallCallback(void* tox, uint32_t group, uint32_t peer, const int16_t* data,
                                   unsigned samples, uint8_t channels, uint32_t sample_rate,
                                   void* core);
-#else
-    static void groupCallCallback(void* tox, int group, int peer, const int16_t* data, unsigned samples,
-                                  uint8_t channels, unsigned sample_rate, void* core);
-#endif
     static void invalidateGroupCallPeerSource(int group, int peer);
     static void invalidateGroupCallSources(int group);
 
@@ -93,7 +87,6 @@ public slots:
     bool cancelCall(uint32_t friendNum);
     void timeoutCall(uint32_t friendNum);
     void start();
-    void stop();
 
 signals:
     void avInvite(uint32_t friendId, bool video);
@@ -109,6 +102,17 @@ private slots:
     static void videoBitrateCallback(ToxAV* toxAV, uint32_t friendNum, uint32_t rate, void* self);
 
 private:
+    struct ToxAVDeleter
+    {
+        void operator()(ToxAV* tox)
+        {
+            toxav_kill(tox);
+        }
+    };
+
+    explicit CoreAV(std::unique_ptr<ToxAV, ToxAVDeleter> tox);
+    void connectCallbacks(ToxAV& toxav);
+
     void process();
     static void audioFrameCallback(ToxAV* toxAV, uint32_t friendNum, const int16_t* pcm,
                                    size_t sampleCount, uint8_t channels, uint32_t samplingRate,
@@ -121,9 +125,10 @@ private:
     static constexpr uint32_t VIDEO_DEFAULT_BITRATE = 2500;
 
 private:
-    ToxAV* toxav;
+
+    std::unique_ptr<ToxAV, ToxAVDeleter> toxav;
     std::unique_ptr<QThread> coreavThread;
-    std::unique_ptr<QTimer> iterateTimer;
+    QTimer* iterateTimer = nullptr;
     static std::map<uint32_t, ToxFriendCall> calls;
     static std::map<int, ToxGroupCall> groupCalls;
     std::atomic_flag threadSwitchLock;

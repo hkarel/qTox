@@ -47,12 +47,14 @@ const QString Core::TOX_EXT = ".tox";
 Core::Core(QThread* coreThread)
     : tox(nullptr)
     , av(nullptr)
+    , toxTimer{new QTimer{this}}
     , coreLoopLock(new QMutex(QMutex::Recursive))
     , coreThread(coreThread)
 {
-    toxTimer.setSingleShot(true);
-    connect(&this->toxTimer, &QTimer::timeout, this, &Core::process);
-    connect(coreThread, &QThread::finished, &toxTimer, &QTimer::stop);
+    assert(toxTimer);
+    toxTimer->setSingleShot(true);
+    connect(toxTimer, &QTimer::timeout, this, &Core::process);
+    connect(coreThread, &QThread::finished, toxTimer, &QTimer::stop);
 }
 
 Core::~Core()
@@ -82,12 +84,8 @@ void Core::registerCallbacks(Tox* tox)
     tox_callback_friend_read_receipt(tox, onReadReceiptCallback);
     tox_callback_conference_invite(tox, onGroupInvite);
     tox_callback_conference_message(tox, onGroupMessage);
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
     tox_callback_conference_peer_list_changed(tox, onGroupPeerListChange);
     tox_callback_conference_peer_name(tox, onGroupPeerNameChange);
-#else
-    tox_callback_conference_namelist_change(tox, onGroupNamelistChange);
-#endif
     tox_callback_conference_title(tox, onGroupTitleChange);
     tox_callback_file_chunk_request(tox, CoreFile::onFileDataCallback);
     tox_callback_file_recv(tox, CoreFile::onFileReceiveCallback);
@@ -211,8 +209,8 @@ ToxCorePtr Core::makeToxCore(const QByteArray& savedata, const ICoreSettings* co
     assert(core->tox != nullptr);
 
     // toxcore is successfully created, create toxav
-    core->av = std::unique_ptr<CoreAV>(new CoreAV(core->tox.get()));
-    if (!core->av || !core->av->getToxAv()) {
+    core->av = CoreAV::makeCoreAV(core->tox.get());
+    if (!core->av) {
         qCritical() << "Toxav failed to start";
         if (err) {
             *err = ToxCoreErrors::FAILED_TO_START;
@@ -225,8 +223,6 @@ ToxCorePtr Core::makeToxCore(const QByteArray& savedata, const ICoreSettings* co
     // connect the thread with the Core
     connect(thread, &QThread::started, core.get(), &Core::onStarted);
     core->moveToThread(thread);
-    // since this is allocated in the constructor move it to the other thread too
-    core->toxTimer.moveToThread(thread);
 
     // when leaving this function 'core' should be ready for it's start() action or
     // a nullptr
@@ -323,7 +319,7 @@ void Core::process()
 
     unsigned sleeptime =
         qMin(tox_iteration_interval(tox.get()), CoreFile::corefileIterationInterval());
-    toxTimer.start(sleeptime);
+    toxTimer->start(sleeptime);
 }
 
 bool Core::checkConnection()
@@ -460,21 +456,11 @@ void Core::onGroupInvite(Tox* tox, uint32_t friendId, Tox_Conference_Type type,
     switch (type) {
     case TOX_CONFERENCE_TYPE_TEXT:
         qDebug() << QString("Text group invite by %1").arg(friendId);
-        if (friendId == UINT32_MAX) {
-            // Rejoining existing (persistent) conference after disconnect and reconnect.
-            tox_conference_join(tox, friendId, cookie, length, nullptr);
-            return;
-        }
         emit core->groupInviteReceived(inviteInfo);
         break;
 
     case TOX_CONFERENCE_TYPE_AV:
         qDebug() << QString("AV group invite by %1").arg(friendId);
-        if (friendId == UINT32_MAX) {
-            // Rejoining existing (persistent) AV conference after disconnect and reconnect.
-            toxav_join_av_groupchat(tox, friendId, cookie, length, CoreAV::groupCallCallback, core);
-            return;
-        }
         emit core->groupInviteReceived(inviteInfo);
         break;
 
@@ -492,16 +478,15 @@ void Core::onGroupMessage(Tox*, uint32_t groupId, uint32_t peerId, Tox_Message_T
     emit core->groupMessageReceived(groupId, peerId, message, isAction);
 }
 
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
-void Core::onGroupPeerListChange(Tox*, uint32_t groupId, void* core)
+void Core::onGroupPeerListChange(Tox*, uint32_t groupId, void* vCore)
 {
-    const auto coreAv = static_cast<Core*>(core)->getAv();
-    if (coreAv->isGroupAvEnabled(groupId)) {
+    const auto core = static_cast<Core*>(vCore);
+    if (core->getGroupAvEnabled(groupId)) {
         CoreAV::invalidateGroupCallSources(groupId);
     }
 
     qDebug() << QString("Group %1 peerlist changed").arg(groupId);
-    emit static_cast<Core*>(core)->groupPeerlistChanged(groupId);
+    emit core->groupPeerlistChanged(groupId);
 }
 
 void Core::onGroupPeerNameChange(Tox*, uint32_t groupId, uint32_t peerId, const uint8_t* name,
@@ -511,22 +496,6 @@ void Core::onGroupPeerNameChange(Tox*, uint32_t groupId, uint32_t peerId, const 
     qDebug() << QString("Group %1, Peer %2, name changed to %3").arg(groupId).arg(peerId).arg(newName);
     emit static_cast<Core*>(core)->groupPeerNameChanged(groupId, peerId, newName);
 }
-
-#else
-// for toxcore < 0.2.0, aka old groups
-void Core::onGroupNamelistChange(Tox*, uint32_t groupId, uint32_t peerId,
-                                 TOX_CONFERENCE_STATE_CHANGE change, void* core)
-{
-    CoreAV* coreAv = static_cast<Core*>(core)->getAv();
-    const auto changed = change == TOX_CONFERENCE_STATE_CHANGE_PEER_EXIT;
-    if (changed && coreAv->isGroupAvEnabled(groupId)) {
-        CoreAV::invalidateGroupCallPeerSource(groupId, peerId);
-    }
-
-    qDebug() << QString("Group namelist change %1:%2 %3").arg(groupId).arg(peerId).arg(change);
-    emit static_cast<Core*>(core)->groupNamelistChanged(groupId, peerId, change);
-}
-#endif
 
 void Core::onGroupTitleChange(Tox*, uint32_t groupId, uint32_t peerId, const uint8_t* cTitle,
                               size_t length, void* vCore)
@@ -1203,6 +1172,30 @@ QStringList Core::getGroupPeerNames(int groupId) const
 }
 
 /**
+ * @brief Check, that group has audio or video stream
+ * @param groupId Id of group to check
+ * @return True for AV groups, false for text-only groups
+ */
+bool Core::getGroupAvEnabled(int groupId) const
+{
+    QMutexLocker ml{coreLoopLock.get()};
+    TOX_ERR_CONFERENCE_GET_TYPE error;
+    TOX_CONFERENCE_TYPE type = tox_conference_get_type(tox.get(), groupId, &error);
+    switch (error) {
+    case TOX_ERR_CONFERENCE_GET_TYPE_OK:
+        break;
+    case TOX_ERR_CONFERENCE_GET_TYPE_CONFERENCE_NOT_FOUND:
+        qWarning() << "Conference not found";
+        break;
+    default:
+        qWarning() << "Unknown error code:" << QString::number(error);
+        break;
+    }
+
+    return type == TOX_CONFERENCE_TYPE_AV;
+}
+
+/**
  * @brief Print in console text of error.
  * @param error Error to handle.
  * @return True if no error, false otherwise.
@@ -1461,7 +1454,7 @@ QString Core::getPeerName(const ToxPk& id) const
  */
 bool Core::isReady() const
 {
-    return av && av->getToxAv() && tox;
+    return av && tox;
 }
 
 /**
