@@ -62,6 +62,9 @@ Project {
             "GIT_DESCRIBE=\"" + versionProbe.gitDescribe + "\"",
             "TIMESTAMP=\"" + versionProbe.timestamp + "\"",
         ];
+        if (qbs.buildVariant === "release")
+            def.push("NDEBUG");
+
         return def;
     }
 

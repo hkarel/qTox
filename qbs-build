@@ -130,16 +130,6 @@ check_need_package 'libconfig-dev'
 check_need_package 'libhunspell-dev'
 
 if [ "$os_id" = "ubuntu" -a "$os_ver" = "16.04" ]; then
-
-    res=$(dpkg -l | grep -P "^ii\s+ffmpeg-static.*7:4\.[0-9]\.[0-9]")
-    if [ -z "$res" ]; then
-        echo "Error: Need to install ffmpeg package"
-        echo "    Use ppa:mc3man/ffmpeg-test"
-        echo "    sudo add-apt-repository ppa:mc3man/ffmpeg-test"
-        echo "    sudo apt-get update"
-        echo "    sudo apt-get install ffmpeg"
-        exit 1
-    fi
     check_need_package 'libvpx-dev'
     check_need_package 'libsndio-dev'
     check_need_package 'libgsm1-dev'
@@ -147,55 +137,12 @@ if [ "$os_id" = "ubuntu" -a "$os_ver" = "16.04" ]; then
     
 elif [ "$os_id" = "ubuntu" -a "$os_ver" = "14.04" ]; then
 
-    res=$(dpkg -l | grep -P "^ii\s+ffmpeg.*7:3\.[0-9]\.[0-9]")
-    if [ -z "$res" ]; then
-        echo "Error: Need to install ffmpeg package"
-        echo "    Use ppa:mc3man/ffmpeg-test"
-        echo "    sudo add-apt-repository ppa:mc3man/ffmpeg-test"
-        echo "    sudo apt-get update"
-        echo "    sudo apt-get install ffmpeg"
-        exit 1
-    fi
     res=$(dpkg -l | grep -P "^ii\s+libvpx3:.*1\.5\.0-")
-        if [ -z "$res" ]; then
+    if [ -z "$res" ]; then
         echo "Error: Need to install flibvpx-dev package, version 1.5.0"
         exit 1
     fi
 fi
-
-# For FFmpeg
-check_need_package 'libxext-dev'
-check_need_package 'libxv-dev'
-check_need_package 'libxcb1-dev'
-check_need_package 'libxcb-shm0-dev'
-check_need_package 'libxcb-xfixes0-dev'
-check_need_package 'libxcb-shape0-dev'
-check_need_package 'libasound2-dev'
-check_need_package 'libpulse-dev'
-check_need_package 'libgnutls28-dev'
-check_need_package 'libsoxr-dev'
-check_need_package 'libvorbis-dev'
-check_need_package 'libvdpau-dev'
-check_need_package 'libva-dev'
-check_need_package 'libfreetype6-dev'
-check_need_package 'libass-dev'
-check_need_package 'libmlt-dev'
-check_need_package 'libmlt++-dev'
-check_need_package 'libvidstab-dev'
-check_need_package 'libzimg-dev'
-check_need_package 'libaacs-dev'
-check_need_package 'libbz2-dev'
-check_need_package 'libsdl2-dev'
-check_need_package 'libx264-dev'
-check_need_package 'libx265-dev'
-check_need_package 'libmp3lame-dev'
-check_need_package 'libxvidcore-dev'
-check_need_package 'libspeex-dev'
-check_need_package 'libtheora-dev'
-check_need_package 'libopencore-amrnb-dev'
-check_need_package 'libopencore-amrwb-dev'
-check_need_package 'libwavpack-dev'
-check_need_package 'libfdk-aac-dev'
 
 if [ "$build_deb_package" = "yes" -o "$install" = "yes" ]; then
     # Required packages
@@ -318,12 +265,17 @@ for f in $(find $package_dir/opt/qtox/plugins -type f); do
 done
 
 if [ "$build_mode" = "release" ]; then
+    set +e
     echo "Removing debug info ... "
+    for f in $(find $package_dir/opt/qtox/lib -type f); do
+        strip --strip-debug --strip-unneeded $f
+    done
     strip --strip-debug --strip-unneeded $package_dir/opt/qtox/qtox
     if [ -e $package_dir/opt/qtox/lib/libstdc++.so.6.0.21 ]; then
         strip --strip-debug --strip-unneeded $package_dir/opt/qtox/lib/libgcc_s.so.1
         strip --strip-debug --strip-unneeded $package_dir/opt/qtox/lib/libstdc++.so.6.0.21
     fi
+    set -e
 fi
 
 # The size of deb-package
