@@ -3,7 +3,7 @@
 #include "src/core/icoresettings.h"
 #include "src/core/toxlogger.h"
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <QByteArray>
 #include <QDebug>
