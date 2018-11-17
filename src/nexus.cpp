@@ -31,8 +31,6 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDesktopWidget>
-#include <QFile>
-#include <QImageReader>
 #include <QThread>
 #include <cassert>
 #include <vpx/vpx_image.h>
@@ -60,7 +58,6 @@ Nexus::Nexus(QObject* parent)
     : QObject(parent)
     , profile{nullptr}
     , widget{nullptr}
-    , running{true}
 {}
 
 Nexus::~Nexus()
@@ -164,7 +161,7 @@ void Nexus::showLogin()
         Settings::getInstance().setCurrentProfile(profile->getName());
         showMainGUI();
     } else {
-        quit();
+        qApp->quit();
     }
 }
 
@@ -227,26 +224,6 @@ void Nexus::showMainGUI()
 }
 
 /**
- * @brief Calls QApplication::quit(), and causes Nexus::isRunning() to return false
- */
-void Nexus::quit()
-{
-    running = false;
-    qApp->quit();
-}
-
-/**
- * @brief Returns true until Nexus::quit is called.
- *
- * Any blocking processEvents() loop should check this as a return condition,
- * since the application can not quit until control is returned to the event loop.
- */
-bool Nexus::isRunning()
-{
-    return running;
-}
-
-/**
  * @brief Returns the singleton instance.
  */
 Nexus& Nexus::getInstance()
@@ -303,28 +280,6 @@ void Nexus::setProfile(Profile* profile)
 Widget* Nexus::getDesktopGUI()
 {
     return getInstance().widget;
-}
-
-QString Nexus::getSupportedImageFilter()
-{
-    QString res;
-    for (auto type : QImageReader::supportedImageFormats())
-        res += QString("*.%1 ").arg(QString(type));
-
-    return tr("Images (%1)", "filetype filter").arg(res.left(res.size() - 1));
-}
-
-/**
- * @brief Dangerous way to find out if a path is writable.
- * @param filepath Path to file which should be deleted.
- * @return True, if file writeable, false otherwise.
- */
-bool Nexus::tryRemoveFile(const QString& filepath)
-{
-    QFile tmp(filepath);
-    bool writable = tmp.open(QIODevice::WriteOnly);
-    tmp.remove();
-    return writable;
 }
 
 #ifdef Q_OS_MAC

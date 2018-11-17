@@ -32,14 +32,13 @@
 
 #include "src/core/core.h"
 #include "src/core/coreav.h"
-#include "src/core/recursivesignalblocker.h"
 #include "src/net/autoupdate.h"
-#include "src/nexus.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
 #include "src/persistence/smileypack.h"
 #include "src/widget/form/settingswidget.h"
 #include "src/widget/style.h"
+#include "src/widget/tool/recursivesignalblocker.h"
 #include "src/widget/translator.h"
 #include "src/widget/widget.h"
 
@@ -73,6 +72,7 @@ UserInterfaceForm::UserInterfaceForm(SettingsWidget* myParent)
     bodyUI->txtChatFont->setCurrentFont(chatBaseFont);
     int index = static_cast<int>(s.getStylePreference());
     bodyUI->textStyleComboBox->setCurrentIndex(index);
+    bodyUI->useNameColors->setChecked(s.getEnableGroupChatsColor());
 
     bodyUI->notify->setChecked(s.getNotify());
     // Note: UI is boolean inversed from settings to maintain setting file backwards compatibility
@@ -142,7 +142,7 @@ UserInterfaceForm::UserInterfaceForm(SettingsWidget* myParent)
 
     QStringList dateFormats;
     dateFormats << QStringLiteral("yyyy-MM-dd") // ISO 8601
-                // format strings from system locale
+                                                // format strings from system locale
                 << ql.dateFormat(QLocale::LongFormat) << ql.dateFormat(QLocale::ShortFormat)
                 << ql.dateFormat(QLocale::NarrowFormat) << "dd-MM-yyyy"
                 << "d-MM-yyyy"
@@ -373,4 +373,9 @@ void UserInterfaceForm::on_txtChatFontSize_valueChanged(int px)
         tmpFont.setPixelSize(px);
         s.setChatMessageFont(tmpFont);
     }
+}
+
+void UserInterfaceForm::on_useNameColors_stateChanged(int value)
+{
+    Settings::getInstance().setEnableGroupChatsColor(value);
 }

@@ -525,10 +525,6 @@ Widget::~Widget()
         delete form;
     }
 
-    for (auto form : groupChatForms) {
-        delete form;
-    }
-
     delete icon;
     delete profileForm;
     delete profileInfo;
@@ -589,7 +585,7 @@ void Widget::closeEvent(QCloseEvent* event)
         saveWindowGeometry();
         saveSplitterGeometry();
         QWidget::closeEvent(event);
-        Nexus::getInstance().quit();
+        qApp->quit();
     }
 }
 
@@ -638,7 +634,7 @@ void Widget::onFailedToStartCore()
         "toxcore failed to start, the application will terminate after you close this message."));
     critical.setIcon(QMessageBox::Critical);
     critical.exec();
-    Nexus::getInstance().quit();
+    qApp->exit(EXIT_FAILURE);
 }
 
 void Widget::onBadProxyCore()
@@ -1155,7 +1151,7 @@ void Widget::openDialog(GenericChatroomWidget* widget, bool newWindow)
         form = chatForms[id];
     } else {
         id = group->getId();
-        form = groupChatForms[id];
+        form = groupChatForms[id].data();
     }
 
     bool chatFormIsSet;
@@ -1303,7 +1299,7 @@ void Widget::addGroupDialog(Group* group, ContentDialog* dialog)
         onAddClicked();
     }
 
-    auto chatForm = groupChatForms[groupId];
+    auto chatForm = groupChatForms[groupId].data();
     auto chatroom = groupChatrooms[groupId];
     auto groupWidget = dialog->addGroup(chatroom, chatForm);
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 7, 0))
@@ -1749,11 +1745,12 @@ void Widget::onGroupMessageReceived(int groupnumber, int peernumber, const QStri
     const auto targeted = !isSelf && mention;
     const auto groupId = g->getId();
     const auto date = QDateTime::currentDateTime();
-    auto form = groupChatForms[groupId];
+    auto form = groupChatForms[groupId].data();
+
     if (targeted && !isAction) {
-        form->addAlertMessage(author, message, date);
+        form->addAlertMessage(author, message, date, true);
     } else {
-        form->addMessage(author, message, date, isAction);
+        form->addMessage(author, message, date, isAction, true);
     }
 
     newGroupMessageAlert(groupId, targeted || Settings::getInstance().getGroupAlwaysNotify());
@@ -1815,7 +1812,7 @@ void Widget::onGroupPeerAudioPlaying(int groupnumber, int peernumber)
         return;
     }
 
-    auto form = groupChatForms[g->getId()];
+    auto form = groupChatForms[g->getId()].data();
     // TODO(sudden6): switch to ToxPk here
     form->peerAudioPlaying(g->resolvePeerId(peernumber));
 }
@@ -1850,7 +1847,6 @@ void Widget::removeGroup(Group* g, bool fake)
         qWarning() << "Tried to remove group" << groupId << "but GroupChatForm doesn't exist";
         return;
     }
-    delete groupChatFormIt.value();
     groupChatForms.erase(groupChatFormIt);
     delete g;
     if (contentLayout && contentLayout->mainHead->layout()->isEmpty()) {
@@ -1884,7 +1880,7 @@ Group* Widget::createGroup(int groupId)
     auto form = new GroupChatForm(newgroup);
     groupWidgets[groupId] = widget;
     groupChatrooms[groupId] = chatroom;
-    groupChatForms[groupId] = form;
+    groupChatForms[groupId] = QSharedPointer<GroupChatForm>(form);
 
     contactListWidget->addGroupWidget(widget);
     widget->updateStatusLight();
@@ -2090,7 +2086,7 @@ void Widget::onGroupSendFailed(int groupId)
 
     const auto message = tr("Message failed to send");
     const auto curTime = QDateTime::currentDateTime();
-    auto form = groupChatForms[g->getId()];
+    auto form = groupChatForms[g->getId()].data();
     form->addSystemInfoMessage(message, ChatMessage::INFO, curTime);
 }
 

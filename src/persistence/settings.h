@@ -530,6 +530,8 @@ public:
 
     bool getAutoLogin() const;
     void setAutoLogin(bool state);
+    void setEnableGroupChatsColor(bool state);
+    bool getEnableGroupChatsColor() const;
 
     int getCircleCount() const;
     int addCircle(const QString& name = QString());
@@ -568,11 +570,14 @@ public:
     static uint32_t makeProfileId(const QString& profile);
 
 private:
+    struct friendProp;
+
     Settings();
     ~Settings();
     Settings(Settings& settings) = delete;
     Settings& operator=(const Settings&) = delete;
     void savePersonal(QString profileName, const ToxEncrypt* passkey);
+    friendProp& getOrInsertFriendPropRef(const ToxPk& id);
 
 public slots:
     void savePersonal(Profile* profile);
@@ -606,6 +611,7 @@ private:
     bool notifySound;
     bool busySound;
     bool groupAlwaysNotify;
+    bool nameColors;
 
     bool forceTCP;
     bool enableLanDiscovery;
@@ -684,10 +690,14 @@ private:
 
     struct friendProp
     {
-        QString alias;
-        QString addr;
-        QString autoAcceptDir;
-        QString note;
+        friendProp() = delete;
+        friendProp(QString addr)
+            : addr(addr)
+        {}
+        QString alias = "";
+        QString addr = "";
+        QString autoAcceptDir = "";
+        QString note = "";
         int circleID = -1;
         QDate activity = QDate();
         AutoAcceptCallFlags autoAcceptCall;

@@ -42,8 +42,6 @@ class Nexus : public QObject
 public:
     void start();
     void showMainGUI();
-    void quit();
-    bool isRunning();
 
     static Nexus& getInstance();
     static void destroyInstance();
@@ -51,8 +49,6 @@ public:
     static Profile* getProfile();
     static void setProfile(Profile* profile);
     static Widget* getDesktopGUI();
-    static QString getSupportedImageFilter();
-    static bool tryRemoveFile(const QString& filepath);
 
 public slots:
     void showLogin();
@@ -91,7 +87,6 @@ private:
 private:
     Profile* profile;
     Widget* widget;
-    bool running;
 };
 
 #endif // NEXUS_H
