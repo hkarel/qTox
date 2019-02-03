@@ -22,6 +22,7 @@
 
 #include "genericsettings.h"
 
+#include <QUrl>
 #include <memory>
 class Core;
 class QTimer;

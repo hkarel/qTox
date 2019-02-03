@@ -26,7 +26,7 @@
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
 
-#include <tox/tox.h>
+#include <toxcore/tox.h>
 
 #include <QDebug>
 #include <QDesktopServices> 

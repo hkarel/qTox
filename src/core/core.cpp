@@ -656,7 +656,7 @@ void Core::requestFriendship(const ToxId& friendId, const QString& message)
 bool Core::sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type, ReceiptNum& receipt)
 {
     int size = message.toUtf8().size();
-    auto maxSize = tox_max_message_length();
+    int maxSize = tox_max_message_length();
     if (size > maxSize) {
         qCritical() << "Core::sendMessageWithType called with message of size:" << size << "when max is:" << maxSize <<". Ignoring.";
         return false;
@@ -693,7 +693,6 @@ void Core::sendTyping(uint32_t friendId, bool typing)
     }
 }
 
-    return false;
 void Core::sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type)
 {
     QMutexLocker ml{coreLoopLock.get()};

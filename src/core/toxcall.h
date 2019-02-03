@@ -2,7 +2,7 @@
 #define TOXCALL_H
 
 #include <src/core/toxpk.h>
-#include <tox/toxav.h>
+#include <toxav/toxav.h>
 
 #include <QMap>
 #include <QMetaObject>

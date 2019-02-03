@@ -278,6 +278,8 @@ Product {
             "src/chatlog/pixmapcache.h",
             "src/chatlog/textformatter.cpp",
             "src/chatlog/textformatter.h",
+            "src/chatlog/toxfileprogress.cpp",
+            "src/chatlog/toxfileprogress.h",
             "src/core/coreav.cpp",
             "src/core/coreav.h",
             "src/core/core.cpp",
@@ -329,8 +331,8 @@ Product {
             "src/model/group.cpp",
             "src/model/group.h",
             "src/model/interface.h",
-            "src/net/autoupdate.cpp",
-            "src/net/autoupdate.h",
+            //"src/net/autoupdate.cpp",
+            //"src/net/autoupdate.h",
             "src/net/avatarbroadcaster.cpp",
             "src/net/avatarbroadcaster.h",
             "src/net/toxme.cpp",
@@ -392,6 +394,8 @@ Product {
             "src/widget/circlewidget.h",
             "src/widget/contentdialog.cpp",
             "src/widget/contentdialog.h",
+            "src/widget/contentdialogmanager.cpp",
+            "src/widget/contentdialogmanager.h",
             "src/widget/contentlayout.cpp",
             "src/widget/contentlayout.h",
             "src/widget/emoticonswidget.cpp",
@@ -555,17 +559,21 @@ Product {
                 "src/platform/autorun.h",
                 "src/platform/capslock.h",
                 "src/platform/timer.h",
-                "src/platform/autorun_osx.cpp",
-                "src/platform/autorun_win.cpp",
-                "src/platform/autorun_xdg.cpp",
-                "src/platform/capslock_osx.cpp",
-                "src/platform/capslock_win.cpp",
-                "src/platform/capslock_x11.cpp",
-                "src/platform/timer_osx.cpp",
-                "src/platform/timer_win.cpp",
-                "src/platform/timer_x11.cpp",
                 "src/platform/x11_display.cpp",
             ]);
+            if (qbs.targetOS.containsAny(["linux", "unix"]))
+                f = f.concat([
+                    "src/platform/autorun_xdg.cpp",
+                    "src/platform/capslock_x11.cpp",
+                    "src/platform/timer_x11.cpp",
+
+                ]);
+                //"src/platform/autorun_osx.cpp",
+                //"src/platform/autorun_win.cpp",
+                //"src/platform/capslock_osx.cpp",
+                //"src/platform/capslock_win.cpp",
+                //"src/platform/timer_osx.cpp",
+                //"src/platform/timer_win.cpp",
         }
 
         if (qbs.targetOS.containsAny(["linux", "unix"])) {

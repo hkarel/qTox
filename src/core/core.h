@@ -35,6 +35,8 @@
 #include <functional>
 #include <memory>
 
+#include <toxcore/tox.h>
+
 class CoreAV;
 class ICoreSettings;
 class GroupInvite;
