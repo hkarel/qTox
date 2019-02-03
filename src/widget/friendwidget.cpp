@@ -31,6 +31,7 @@
 #include "src/model/group.h"
 #include "src/persistence/settings.h"
 #include "src/widget/about/aboutfriendform.h"
+#include "src/widget/contentdialogmanager.h"
 #include "src/widget/form/chatform.h"
 #include "src/widget/style.h"
 #include "src/widget/tool/croppinglabel.h"
@@ -70,7 +71,7 @@ FriendWidget::FriendWidget(std::shared_ptr<FriendChatroom> chatroom, bool compac
     connect(nameLabel, &CroppingLabel::editFinished, frnd, &Friend::setAlias);
     // update on changes of the displayed name
     connect(frnd, &Friend::displayedNameChanged, nameLabel, &CroppingLabel::setText);
-    connect(frnd, &Friend::displayedNameChanged, [this](const QString /* &newName */){emit friendWidgetRenamed(this);});
+    connect(frnd, &Friend::displayedNameChanged, this, [this](const QString /* &newName */){emit friendWidgetRenamed(this);});
     connect(chatroom.get(), &FriendChatroom::activeChanged, this, &FriendWidget::setActive);
     statusMessageLabel->setTextFormat(Qt::PlainText);
 }
@@ -105,7 +106,7 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
 
     const auto frnd = chatroom->getFriend();
     const auto friendId = frnd->getId();
-    const auto contentDialog = ContentDialog::getFriendDialog(friendId);
+    const auto contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendId);
 
     // TODO: move to model
     if (!contentDialog || contentDialog->chatroomWidgetCount() > 1) {
@@ -114,7 +115,7 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     }
 
     // TODO: move to model
-    if (contentDialog && contentDialog->hasFriendWidget(friendId, this)) {
+    if (contentDialog && contentDialog->hasFriendWidget(friendId)) {
         const auto removeChatWindow = menu.addAction(tr("Remove chat from this window"));
         connect(removeChatWindow, &QAction::triggered, this, &FriendWidget::removeChatWindow);
     }
@@ -169,7 +170,7 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     menu.addSeparator();
 
     // TODO: move to model
-    if (!contentDialog || !contentDialog->hasFriendWidget(friendId, this)) {
+    if (!contentDialog || !contentDialog->hasFriendWidget(friendId)) {
         const auto removeAction =
             menu.addAction(tr("Remove friend", "Menu to remove the friend from our friendlist"));
         connect(removeAction, &QAction::triggered, this, [=]() { emit removeFriend(friendId); },
@@ -194,7 +195,7 @@ void FriendWidget::removeChatWindow()
 {
     const auto frnd = chatroom->getFriend();
     const auto friendId = frnd->getId();
-    ContentDialog* contentDialog = ContentDialog::getFriendDialog(friendId);
+    ContentDialog* contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendId);
     contentDialog->removeFriend(friendId);
 }
 

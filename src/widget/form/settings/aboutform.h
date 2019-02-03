@@ -22,9 +22,12 @@
 
 #include "genericsettings.h"
 
+#include <memory>
 class Core;
 class QTimer;
 class QString;
+class UpdateCheck;
+class QLayoutItem;
 
 namespace Ui {
 class AboutSettings;
@@ -34,18 +37,17 @@ class AboutForm : public GenericForm
 {
     Q_OBJECT
 public:
-    AboutForm();
+    AboutForm(UpdateCheck* updateCheck);
     ~AboutForm();
     virtual QString getFormName() final override
     {
         return tr("About");
     }
 
-protected:
-private slots:
-    void showUpdateProgress();
-    virtual void hideEvent(QHideEvent*) final override;
-    virtual void showEvent(QShowEvent*) final override;
+public slots:
+    void onUpdateAvailable(QString latestVersion, QUrl link);
+    void onUpToDate();
+    void onUpdateCheckFailed();
 
 private:
     void retranslateUi();
@@ -55,6 +57,8 @@ private:
 private:
     Ui::AboutSettings* bodyUI;
     QTimer* progressTimer;
+    UpdateCheck* updateCheck;
+    QMetaObject::Connection linkConnection;
 };
 
 #endif // ABOUTFORM_H

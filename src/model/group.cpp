@@ -21,6 +21,7 @@
 #include "friend.h"
 #include "src/friendlist.h"
 #include "src/core/core.h"
+#include "src/core/coreav.h"
 #include "src/persistence/settings.h"
 #include "src/widget/form/groupchatform.h"
 #include "src/widget/groupwidget.h"
@@ -46,12 +47,7 @@ void Group::updatePeer(int peerId, QString name)
 {
     ToxPk peerKey = Core::getInstance()->getGroupPeerPk(groupId, peerId);
     toxpks[peerKey] = name;
-
-    Friend* f = FriendList::findFriend(peerKey);
-    if (f != nullptr) {
-        // use the displayed name from the friends list
-        toxpks[peerKey] = f->getDisplayedName();
-    }
+    qDebug() << "name change: " + name;
     emit userListChanged(groupId, toxpks);
 }
 
@@ -86,41 +82,45 @@ QString Group::getDisplayedName() const
     return getName();
 }
 
-/**
- * @brief performs a peerId to ToxPk lookup
- * @param peerId peerId to lookup
- * @return ToxPk if peerId found
- * @note should not be used, reference peers by their ToxPk instead
- * @todo remove this function
- */
-const ToxPk Group::resolvePeerId(int peerId) const
-{
-    const Core* core = Core::getInstance();
-    return core->getGroupPeerPk(groupId, peerId);
-}
-
 void Group::regeneratePeerList()
 {
     const Core* core = Core::getInstance();
 
     QStringList peers = core->getGroupPeerNames(groupId);
+    const auto oldPeers = toxpks.keys();
     toxpks.clear();
     const int nPeers = peers.size();
     for (int i = 0; i < nPeers; ++i) {
         const auto pk = core->getGroupPeerPk(groupId, i);
 
-        toxpks[pk] = peers[i];
-        if (toxpks[pk].isEmpty()) {
-            toxpks[pk] =
-                tr("<Empty>", "Placeholder when someone's name in a group chat is empty");
-        }
-
         Friend* f = FriendList::findFriend(pk);
         if (f != nullptr && f->hasAlias()) {
             toxpks[pk] = f->getDisplayedName();
+            empty_nick[pk] = false;
+            continue;
+        }
+
+        empty_nick[pk] = peers[i].isEmpty();
+        if (empty_nick[pk]) {
+            toxpks[pk] = tr("<Empty>", "Placeholder when someone's name in a group chat is empty");
+        } else {
+            toxpks[pk] = peers[i];
         }
     }
+    if (avGroupchat) {
+        stopAudioOfDepartedPeers(oldPeers, toxpks);
+    }
+    emit userListChanged(groupId, toxpks);
+}
 
+bool Group::peerHasNickname(ToxPk pk)
+{
+    return !empty_nick[pk];
+}
+
+void Group::updateUsername(ToxPk pk, const QString newName)
+{
+    toxpks[pk] = newName;
     emit userListChanged(groupId, toxpks);
 }
 
@@ -182,4 +182,19 @@ QString Group::resolveToxId(const ToxPk& id) const
 void Group::setSelfName(const QString& name)
 {
     selfName = name;
+}
+
+QString Group::getSelfName() const
+{
+    return selfName;
+}
+
+void Group::stopAudioOfDepartedPeers(const QList<ToxPk>& oldPks, const QMap<ToxPk, QString>& newPks)
+{
+    Core* core = Core::getInstance();
+    for(const auto& pk: oldPks) {
+        if(!newPks.contains(pk)) {
+            core->getAv()->invalidateGroupCallPeerSource(groupId, pk);
+        }
+    }
 }

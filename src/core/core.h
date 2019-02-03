@@ -25,7 +25,7 @@
 #include "toxid.h"
 
 #include "src/core/dhtserver.h"
-#include <toxcore/tox.h>
+#include "src/util/strongtype.h"
 
 #include <QMutex>
 #include <QObject>
@@ -51,6 +51,8 @@ enum class Status
 class Core;
 
 using ToxCorePtr = std::unique_ptr<Core>;
+using ReceiptNum = NamedType<uint32_t, struct ReceiptNumTag>;
+Q_DECLARE_METATYPE(ReceiptNum);
 
 class Core : public QObject
 {
@@ -118,11 +120,11 @@ public slots:
     void setUsername(const QString& username);
     void setStatusMessage(const QString& message);
 
-    int sendMessage(uint32_t friendId, const QString& message);
+    bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt);
     void sendGroupMessage(int groupId, const QString& message);
     void sendGroupAction(int groupId, const QString& message);
     void changeGroupTitle(int groupId, const QString& title);
-    int sendAction(uint32_t friendId, const QString& action);
+    bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt);
     void sendTyping(uint32_t friendId, bool typing);
 
     void sendAvatarFile(uint32_t friendId, const QByteArray& data);
@@ -130,8 +132,7 @@ public slots:
     void cancelFileRecv(uint32_t friendId, uint32_t fileNum);
     void rejectFileRecvRequest(uint32_t friendId, uint32_t fileNum);
     void acceptFileRecvRequest(uint32_t friendId, uint32_t fileNum, QString path);
-    void pauseResumeFileSend(uint32_t friendId, uint32_t fileNum);
-    void pauseResumeFileRecv(uint32_t friendId, uint32_t fileNum);
+    void pauseResumeFile(uint32_t friendId, uint32_t fileNum);
 
     void setNospam(uint32_t nospam);
 
@@ -190,20 +191,18 @@ signals:
     void friendRemoved(uint32_t friendId);
     void friendLastSeenChanged(uint32_t friendId, const QDateTime& dateTime);
 
-    void emptyGroupCreated(int groupnumber);
+    void emptyGroupCreated(int groupnumber, const QString& title = QString());
     void groupInviteReceived(const GroupInvite& inviteInfo);
     void groupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
     void groupNamelistChanged(int groupnumber, int peernumber, uint8_t change);
     void groupPeerlistChanged(int groupnumber);
     void groupPeerNameChanged(int groupnumber, int peernumber, const QString& newName);
     void groupTitleChanged(int groupnumber, const QString& author, const QString& title);
-    void groupPeerAudioPlaying(int groupnumber, int peernumber);
-
-    void messageSentResult(uint32_t friendId, const QString& message, int messageId);
+    void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
 
-    void receiptRecieved(int friedId, int receipt);
+    void receiptRecieved(int friedId, ReceiptNum receipt);
 
     void failedToRemoveFriend(uint32_t friendId);
 
@@ -237,6 +236,7 @@ private:
     static void onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core);
 
     void sendGroupMessageWithType(int groupId, const QString& message, Tox_Message_Type type);
+    bool sendMessageWithType(uint32_t friendId, const QString& message, Tox_Message_Type type, ReceiptNum& receipt);
     bool parsePeerQueryError(Tox_Err_Conference_Peer_Query error) const;
     bool parseConferenceJoinError(Tox_Err_Conference_Join error) const;
     bool checkConnection();
@@ -245,6 +245,7 @@ private:
     void makeTox(QByteArray savedata, ICoreSettings* s);
     void makeAv();
     void loadFriends();
+    void loadGroups();
     void bootstrapDht();
 
     void checkLastOnline(uint32_t friendId);

@@ -9,8 +9,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 option(PLATFORM_EXTENSIONS "Enable platform specific extensions, requires extra dependencies" ON)
 option(USE_FILTERAUDIO "Enable the echo canceling backend" ON)
-# AUTOUPDATE is currently broken and thus disabled
-option(AUTOUPDATE "Enable the auto updater" OFF)
+option(UPDATE_CHECK "Enable automatic update check" ON)
 option(USE_CCACHE "Use ccache when available" ON)
 option(SPELL_CHECK "Enable spell cheching support" ON)
 option(ASAN "Compile with AddressSanitizer" OFF)
@@ -70,6 +69,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wstrict-overflow")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wstrict-aliasing")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
+# avoid timestamps in binary for reproducible builds, not added until GCC 4.9
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG(-Wdate-time COMPILER_SUPPORTS_WDATE_TIME)
+if(COMPILER_SUPPORTS_WDATE_TIME)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdate-time")
+endif()
+
 if (NOT WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstack-protector-all")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wstack-protector")
@@ -79,6 +85,8 @@ if (UNIX AND NOT APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,now")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro")
 endif()
+
+include(CheckAtomic)
 
 
 # Use ccache when available to speed up builds.
@@ -99,6 +107,15 @@ include_directories(${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
 
 include(Dependencies)
+
+if(NOT Qt5Widgets_VERSION VERSION_LESS "5.9")
+  # Drop the file modification time of source files from generated files
+  # to help with reproducible builds. We do not use QFileInfo.lastModified
+  # so this has no unwanted side effects. This mtime started appearing in
+  # Qt 5.8. The option to force the old file format without mtime was
+  # added in Qt 5.9. See https://bugreports.qt.io/browse/QTBUG-58769
+  set(RCC_OPTIONS ${RCC_OPTIONS} -format-version 1)
+endif()
 
 ################################################################################
 #
@@ -247,6 +264,8 @@ set(${PROJECT_NAME}_SOURCES
   src/chatlog/documentcache.h
   src/chatlog/pixmapcache.cpp
   src/chatlog/pixmapcache.h
+  src/chatlog/toxfileprogress.cpp
+  src/chatlog/toxfileprogress.h
   src/chatlog/textformatter.cpp
   src/chatlog/textformatter.h
   src/core/coreav.cpp
@@ -264,6 +283,7 @@ set(${PROJECT_NAME}_SOURCES
   src/core/toxencrypt.h
   src/core/toxfile.cpp
   src/core/toxfile.h
+  src/core/toxfilepause.h
   src/core/toxid.cpp
   src/core/toxid.h
   src/core/toxlogger.cpp
@@ -300,6 +320,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/profile/iprofileinfo.h
   src/model/profile/profileinfo.cpp
   src/model/profile/profileinfo.h
+  src/net/bootstrapnodeupdater.cpp
+  src/net/bootstrapnodeupdater.h
   src/net/avatarbroadcaster.cpp
   src/net/avatarbroadcaster.h
   src/net/toxme.cpp
@@ -364,6 +386,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/circlewidget.h
   src/widget/contentdialog.cpp
   src/widget/contentdialog.h
+  src/widget/contentdialogmanager.cpp
+  src/widget/contentdialogmanager.h
   src/widget/contentlayout.cpp
   src/widget/contentlayout.h
   src/widget/emoticonswidget.cpp
@@ -520,17 +544,27 @@ if (PLATFORM_EXTENSIONS)
     src/platform/autorun.h
     src/platform/capslock.h
     src/platform/timer.h
-    src/platform/autorun_osx.cpp
-    src/platform/autorun_win.cpp
-    src/platform/autorun_xdg.cpp
-    src/platform/capslock_osx.cpp
-    src/platform/capslock_win.cpp
-    src/platform/capslock_x11.cpp
-    src/platform/timer_osx.cpp
-    src/platform/timer_win.cpp
-    src/platform/timer_x11.cpp
-    src/platform/x11_display.cpp
   )
+  if (WIN32)
+    set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+      src/platform/autorun_win.cpp
+      src/platform/capslock_win.cpp
+      src/platform/timer_win.cpp
+    )
+  elseif (${X11_EXT})
+    set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+      src/platform/autorun_xdg.cpp
+      src/platform/capslock_x11.cpp
+      src/platform/timer_x11.cpp
+      src/platform/x11_display.cpp
+    )
+  elseif (${APPLE_EXT})
+    set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+      src/platform/autorun_osx.cpp
+      src/platform/capslock_osx.cpp
+      src/platform/timer_osx.cpp
+    )
+  endif()
 endif()
 
 add_definitions(-DQT_MESSAGELOGCONTEXT=1)
@@ -605,12 +639,14 @@ if(${USE_FILTERAUDIO})
     endif()
 endif()
 
-if(${AUTOUPDATE} AND (WIN32 OR APPLE))
-    add_definitions(-DAUTOUPDATE_ENABLED=1)
+if(${UPDATE_CHECK})
+    add_definitions(-DUPDATE_CHECK_ENABLED=1)
     set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
-        src/net/autoupdate.cpp
-        src/net/autoupdate.h)
-    message(STATUS "using autoupdater")
+        src/net/updatecheck.cpp
+        src/net/updatecheck.h)
+    message(STATUS "using update check")
+else()
+    message(STATUS "NOT using update check")
 endif()
 
 if (MINGW)

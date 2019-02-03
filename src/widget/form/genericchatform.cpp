@@ -31,6 +31,7 @@
 #include "src/video/genericnetcamview.h"
 #include "src/widget/chatformheader.h"
 #include "src/widget/contentdialog.h"
+#include "src/widget/contentdialogmanager.h"
 #include "src/widget/contentlayout.h"
 #include "src/widget/emoticonswidget.h"
 #include "src/widget/maskablepixmapwidget.h"
@@ -376,7 +377,8 @@ ChatMessage::Ptr GenericChatForm::createMessage(const ToxPk& author, const QStri
 {
     const Core* core = Core::getInstance();
     bool isSelf = author == core->getSelfId().getPublicKey();
-    QString authorStr = isSelf ? core->getUsername() : resolveToxPk(author);
+    QString myNickName = core->getUsername().isEmpty() ? author.toString() : core->getUsername();
+    QString authorStr = isSelf ? myNickName : resolveToxPk(author);
     if (getLatestDate() != QDate::currentDate()) {
         addSystemDateMessage();
     }
@@ -1014,7 +1016,7 @@ void GenericChatForm::showNetcam()
     bodySplitter->setCollapsible(0, false);
 
     QSize minSize = netcam->getSurfaceMinSize();
-    ContentDialog* current = ContentDialog::current();
+    ContentDialog* current = ContentDialogManager::getInstance()->current();
     if (current)
         current->onVideoShow(minSize);
 }
@@ -1024,7 +1026,7 @@ void GenericChatForm::hideNetcam()
     if (!netcam)
         return;
 
-    ContentDialog* current = ContentDialog::current();
+    ContentDialog* current = ContentDialogManager::getInstance()->current();
     if (current)
         current->onVideoHide();
 

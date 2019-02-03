@@ -20,13 +20,28 @@
 #include "aboutform.h"
 #include "ui_aboutsettings.h"
 
-#include <QDebug>
-#include <QTimer>
-#include <toxcore/tox.h>
-
-#include "src/net/autoupdate.h"
 #include "src/widget/tool/recursivesignalblocker.h"
+#include "src/net/updatecheck.h"
 #include "src/widget/translator.h"
+#include "src/persistence/profile.h"
+#include "src/persistence/settings.h"
+
+#include <tox/tox.h>
+
+#include <QDebug>
+#include <QDesktopServices> 
+#include <QPushButton>
+#include <QTimer>
+
+#include <memory>
+
+// index of UI in the QStackedWidget
+enum class updateIndex
+{
+    available = 0,
+    upToDate = 1,
+    failed = 2
+};
 
 /**
  * @class AboutForm
@@ -38,10 +53,11 @@
 /**
  * @brief Constructor of AboutForm.
  */
-AboutForm::AboutForm()
+AboutForm::AboutForm(UpdateCheck* updateCheck)
     : GenericForm(QPixmap(":/img/settings/general.png"))
     , bodyUI(new Ui::AboutSettings)
     , progressTimer(new QTimer(this))
+    , updateCheck(updateCheck)
 {
     bodyUI->setupUi(this);
 
@@ -52,16 +68,6 @@ AboutForm::AboutForm()
 
     if (QString(GIT_VERSION).indexOf(" ") > -1)
         bodyUI->gitVersion->setOpenExternalLinks(false);
-
-#if AUTOUPDATE_ENABLED
-    showUpdateProgress();
-    progressTimer->setInterval(500);
-    progressTimer->setSingleShot(false);
-    connect(progressTimer, &QTimer::timeout, this, &AboutForm::showUpdateProgress);
-#else
-    bodyUI->updateProgress->setVisible(false);
-    bodyUI->updateText->setVisible(false);
-#endif
 
     eventsInit();
     Translator::registerHandler(std::bind(&AboutForm::retranslateUi, this), this);
@@ -83,6 +89,18 @@ void AboutForm::replaceVersions()
                               + QString::number(tox_version_patch());
 
     bodyUI->youAreUsing->setText(tr("You are using qTox version %1.").arg(QString(GIT_DESCRIBE)));
+
+#if UPDATE_CHECK_ENABLED
+    if (updateCheck != nullptr) {
+        connect(updateCheck, &UpdateCheck::updateAvailable, this, &AboutForm::onUpdateAvailable);
+        connect(updateCheck, &UpdateCheck::upToDate, this, &AboutForm::onUpToDate);
+        connect(updateCheck, &UpdateCheck::updateCheckFailed, this, &AboutForm::onUpdateCheckFailed);
+    } else {
+        qWarning() << "AboutForm passed null UpdateCheck!";
+    }
+#else
+    qDebug() << "AboutForm not showing updates, qTox built without UPDATE_CHECK";
+#endif
 
     QString commitLink = "https://github.com/qTox/qTox/commit/" + QString(GIT_VERSION);
     bodyUI->gitVersion->setText(
@@ -146,6 +164,25 @@ void AboutForm::replaceVersions()
     bodyUI->authorInfo->setText(authorInfo);
 }
 
+void AboutForm::onUpdateAvailable(QString latestVersion, QUrl link)
+{
+    QObject::disconnect(linkConnection);
+    linkConnection = connect(bodyUI->updateAvailableButton, &QPushButton::clicked, [link](){
+        QDesktopServices::openUrl(link);
+    });
+    bodyUI->updateStack->setCurrentIndex(static_cast<int>(updateIndex::available));
+}
+
+void AboutForm::onUpToDate()
+{
+    bodyUI->updateStack->setCurrentIndex(static_cast<int>(updateIndex::upToDate));
+}
+
+void AboutForm::onUpdateCheckFailed()
+{
+    bodyUI->updateStack->setCurrentIndex(static_cast<int>(updateIndex::failed));
+}
+
 /**
  * @brief Creates hyperlink with specific style.
  * @param path The URL of the page the link goes to.
@@ -166,51 +203,10 @@ AboutForm::~AboutForm()
 }
 
 /**
- * @brief Update information about update.
- */
-void AboutForm::showUpdateProgress()
-{
-#if AUTOUPDATE_ENABLED
-    QString version = AutoUpdater::getProgressVersion();
-    int value = AutoUpdater::getProgressValue();
-
-    if (version.isEmpty()) {
-        bodyUI->updateProgress->setVisible(value != 0);
-        bodyUI->updateText->setVisible(value != 0);
-    } else {
-        if (value == 100)
-            bodyUI->updateText->setText(tr("Restart qTox to install version %1").arg(version));
-        else
-            bodyUI->updateText->setText(
-                tr("qTox is downloading update %1", "%1 is the version of the update").arg(version));
-        bodyUI->updateProgress->setValue(value);
-
-        bodyUI->updateProgress->setVisible(value != 0 && value != 100);
-        bodyUI->updateText->setVisible(value != 0);
-    }
-#endif
-}
-
-void AboutForm::hideEvent(QHideEvent*)
-{
-#if AUTOUPDATE_ENABLED
-    progressTimer->stop();
-#endif
-}
-
-void AboutForm::showEvent(QShowEvent*)
-{
-#if AUTOUPDATE_ENABLED
-    progressTimer->start();
-#endif
-}
-
-/**
  * @brief Retranslate all elements in the form.
  */
 void AboutForm::retranslateUi()
 {
     bodyUI->retranslateUi(this);
     replaceVersions();
-    showUpdateProgress();
 }

@@ -22,6 +22,7 @@
 
 #include "src/widget/genericchatitemlayout.h"
 #include "src/widget/tool/activatedialog.h"
+#include "src/core/core.h" // Status
 
 #include <memory>
 #include <tuple>
@@ -42,6 +43,7 @@ class GenericChatroomWidget;
 class Group;
 class GroupChatroom;
 class GroupWidget;
+class QCloseEvent;
 class QSplitter;
 class QVBoxLayout;
 
@@ -58,8 +60,6 @@ public:
     GroupWidget* addGroup(std::shared_ptr<GroupChatroom> chatroom, GenericChatForm* form);
     void removeFriend(int friendId);
     void removeGroup(int groupId);
-    bool hasFriendWidget(int friendId, const GenericChatroomWidget* chatroomWidget) const;
-    bool hasGroupWidget(int groupId, const GenericChatroomWidget* chatroomWidget) const;
     int chatroomWidgetCount() const;
     void ensureSplitterVisible();
     void updateTitleAndStatusIcon();
@@ -68,23 +68,32 @@ public:
     void onVideoShow(QSize size);
     void onVideoHide();
 
-    static ContentDialog* current();
-    static bool friendWidgetExists(int friendId);
-    static bool groupWidgetExists(int groupId);
-    static void focusFriend(int friendId);
-    static void focusGroup(int groupId);
-    static void updateFriendStatus(int friendId);
-    static void updateFriendStatusMessage(int friendId, const QString& message);
-    static void updateGroupStatus(int groupId);
-    static bool isFriendWidgetActive(int friendId);
-    static bool isGroupWidgetActive(int groupId);
-    static ContentDialog* getFriendDialog(int friendId);
-    static ContentDialog* getGroupDialog(int groupId);
+    void addFriendWidget(FriendWidget* widget, Status status);
+    bool isActiveWidget(GenericChatroomWidget* widget);
+
+    bool hasFriendWidget(int friendId) const;
+    bool hasGroupWidget(int groupId) const;
+
+    void focusFriend(int friendId);
+    void focusGroup(int groupId);
+
+    bool containsFriend(int friendId) const;
+    bool containsGroup(int groupId) const;
+
+    void updateFriendStatus(int friendId, Status status);
+    void updateFriendStatusLight(int friendId);
+    void updateGroupStatusLight(int groupId);
+
+    bool isFriendWidgetActive(int friendId);
+    bool isGroupWidgetActive(int groupId);
+
+    void setStatusMessage(int friendId, const QString& message);
 
 signals:
     void friendDialogShown(const Friend* f);
     void groupDialogShown(Group* g);
     void activated();
+    void willClose();
 
 public slots:
     void reorderLayouts(bool newGroupOnTop);
@@ -101,27 +110,25 @@ protected:
     void moveEvent(QMoveEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
-private slots:
+public slots:
     void activate(GenericChatroomWidget* widget);
-    void openNewDialog(GenericChatroomWidget* widget);
+
+private slots:
     void updateFriendWidget(uint32_t friendId, QString alias);
     void onGroupchatPositionChanged(bool top);
 
 private:
+    void closeIfEmpty();
+    void closeEvent(QCloseEvent* event) override;
+
     void retranslateUi();
     void saveDialogGeometry();
     void saveSplitterState();
     QLayout* nextLayout(QLayout* layout, bool forward) const;
     int getCurrentLayout(QLayout*& layout);
+    void focusCommon(int id, QHash<int, GenericChatroomWidget*> list);
 
-    bool hasWidget(int id, const GenericChatroomWidget* chatroomWidget,
-                   const QHash<int, ContactInfo>& list) const;
-    void removeCurrent(QHash<int, ContactInfo>& infos);
-    static bool existsWidget(int id, const QHash<int, ContactInfo>& list);
-    static void focusDialog(int id, const QHash<int, ContactInfo>& list);
-    static void updateStatus(int id, const QHash<int, ContactInfo>& list);
-    static bool isWidgetActive(int id, const QHash<int, ContactInfo>& list);
-    static ContentDialog* getDialog(int id, const QHash<int, ContactInfo>& list);
+private:
 
     QList<QLayout*> layouts;
     QSplitter* splitter;
@@ -132,12 +139,13 @@ private:
     QSize videoSurfaceSize;
     int videoCount;
 
-    static QString username;
-    static ContentDialog* currentDialog;
-    static QHash<int, ContactInfo> friendList;
-    static QHash<int, ContactInfo> groupList;
+    QHash<int, GenericChatroomWidget*> friendWidgets;
+    QHash<int, GenericChatroomWidget*> groupWidgets;
+
     QHash<int, GenericChatForm*> friendChatForms;
     QHash<int, GenericChatForm*> groupChatForms;
+
+    QString username;
 };
 
 #endif // CONTENTDIALOG_H

@@ -69,53 +69,55 @@ static constexpr int TYPING_NOTIFICATION_DURATION = 3000;
 
 const QString ChatForm::ACTION_PREFIX = QStringLiteral("/me ");
 
-QString statusToString(const Status status)
+namespace
 {
-    QString result;
-    switch (status) {
-    case Status::Online:
-        result = ChatForm::tr("online", "contact status");
-        break;
-    case Status::Away:
-        result = ChatForm::tr("away", "contact status");
-        break;
-    case Status::Busy:
-        result = ChatForm::tr("busy", "contact status");
-        break;
-    case Status::Offline:
-        result = ChatForm::tr("offline", "contact status");
-        break;
-    }
-    return result;
-}
-
-QString secondsToDHMS(quint32 duration)
-{
-    QString res;
-    QString cD = ChatForm::tr("Call duration: ");
-    quint32 seconds = duration % 60;
-    duration /= 60;
-    quint32 minutes = duration % 60;
-    duration /= 60;
-    quint32 hours = duration % 24;
-    quint32 days = duration / 24;
-
-    // I assume no one will ever have call longer than a month
-    if (days) {
-        return cD + res.sprintf("%dd%02dh %02dm %02ds", days, hours, minutes, seconds);
+    QString statusToString(const Status status)
+    {
+        QString result;
+        switch (status) {
+        case Status::Online:
+            result = ChatForm::tr("online", "contact status");
+            break;
+        case Status::Away:
+            result = ChatForm::tr("away", "contact status");
+            break;
+        case Status::Busy:
+            result = ChatForm::tr("busy", "contact status");
+            break;
+        case Status::Offline:
+            result = ChatForm::tr("offline", "contact status");
+            break;
+        }
+        return result;
     }
 
-    if (hours) {
-        return cD + res.sprintf("%02dh %02dm %02ds", hours, minutes, seconds);
+    QString secondsToDHMS(quint32 duration)
+    {
+        QString res;
+        QString cD = ChatForm::tr("Call duration: ");
+        quint32 seconds = duration % 60;
+        duration /= 60;
+        quint32 minutes = duration % 60;
+        duration /= 60;
+        quint32 hours = duration % 24;
+        quint32 days = duration / 24;
+
+        // I assume no one will ever have call longer than a month
+        if (days) {
+            return cD + res.sprintf("%dd%02dh %02dm %02ds", days, hours, minutes, seconds);
+        }
+
+        if (hours) {
+            return cD + res.sprintf("%02dh %02dm %02ds", hours, minutes, seconds);
+        }
+
+        if (minutes) {
+            return cD + res.sprintf("%02dm %02ds", minutes, seconds);
+        }
+
+        return cD + res.sprintf("%02ds", seconds);
     }
-
-    if (minutes) {
-        return cD + res.sprintf("%02dm %02ds", minutes, seconds);
-    }
-
-    return cD + res.sprintf("%02ds", seconds);
-}
-
+} // namespace
 
 ChatForm::ChatForm(Friend* chatFriend, History* history)
     : GenericChatForm(chatFriend)
@@ -161,6 +163,9 @@ ChatForm::ChatForm(Friend* chatFriend, History* history)
     connect(core, &Core::fileReceiveRequested, this, &ChatForm::onFileRecvRequest);
     connect(profile, &Profile::friendAvatarChanged, this, &ChatForm::onAvatarChanged);
     connect(core, &Core::fileSendStarted, this, &ChatForm::startFileSend);
+    connect(core, &Core::fileTransferFinished, this, &ChatForm::onFileTransferFinished);
+    connect(core, &Core::fileTransferCancelled, this, &ChatForm::onFileTransferCancelled);
+    connect(core, &Core::fileTransferBrokenUnbroken, this, &ChatForm::onFileTransferBrokenUnbroken);
     connect(core, &Core::fileSendFailed, this, &ChatForm::onFileSendFailed);
     connect(core, &Core::receiptRecieved, this, &ChatForm::onReceiptReceived);
     connect(core, &Core::friendMessageReceived, this, &ChatForm::onFriendMessageReceived);
@@ -312,7 +317,33 @@ void ChatForm::startFileSend(ToxFile file)
 
     insertChatMessage(
         ChatMessage::createFileTransferMessage(name, file, true, QDateTime::currentDateTime()));
+
+    if (history && Settings::getInstance().getEnableLogging()) {
+        auto selfPk = Core::getInstance()->getSelfId().toString();
+        auto pk = f->getPublicKey().toString();
+        auto name = Core::getInstance()->getUsername();
+        history->addNewFileMessage(pk, file.resumeFileId, file.fileName, file.filePath,
+                                   file.filesize, selfPk, QDateTime::currentDateTime(), name);
+    }
+
     Widget::getInstance()->updateFriendActivity(f);
+}
+
+void ChatForm::onFileTransferFinished(ToxFile file)
+{
+    history->setFileFinished(file.resumeFileId, true, file.filePath, file.hashGenerator->result());
+}
+
+void ChatForm::onFileTransferBrokenUnbroken(ToxFile file, bool broken)
+{
+    if (broken) {
+        history->setFileFinished(file.resumeFileId, false, file.filePath, file.hashGenerator->result());
+    }
+}
+
+void ChatForm::onFileTransferCancelled(ToxFile file)
+{
+    history->setFileFinished(file.resumeFileId, false, file.filePath, file.hashGenerator->result());
 }
 
 void ChatForm::onFileRecvRequest(ToxFile file)
@@ -331,9 +362,17 @@ void ChatForm::onFileRecvRequest(ToxFile file)
 
     ChatMessage::Ptr msg =
         ChatMessage::createFileTransferMessage(name, file, false, QDateTime::currentDateTime());
+
     insertChatMessage(msg);
 
+    if (history && Settings::getInstance().getEnableLogging()) {
+        auto pk = f->getPublicKey().toString();
+        auto name = f->getDisplayedName();
+        history->addNewFileMessage(pk, file.resumeFileId, file.fileName, file.filePath,
+                                   file.filesize, pk, QDateTime::currentDateTime(), name);
+    }
     ChatLineContentProxy* proxy = static_cast<ChatLineContentProxy*>(msg->getContent(1));
+
     assert(proxy->getWidgetType() == ChatLineContentProxy::FileTransferWidgetType);
     FileTransferWidget* tfWidget = static_cast<FileTransferWidget*>(proxy->getWidget());
 
@@ -647,7 +686,7 @@ void ChatForm::onStatusMessage(const QString& message)
     }
 }
 
-void ChatForm::onReceiptReceived(quint32 friendId, int receipt)
+void ChatForm::onReceiptReceived(quint32 friendId, ReceiptNum receipt)
 {
     if (friendId == f->getId()) {
         offlineEngine->dischargeReceipt(receipt);
@@ -794,6 +833,11 @@ void ChatForm::handleLoadedMessages(QList<History::HistMessage> newHistMsgs, boo
         MessageMetadata const metadata = getMessageMetadata(histMessage);
         lastDate = addDateLineIfNeeded(chatLines, lastDate, histMessage, metadata);
         auto msg = chatMessageFromHistMessage(histMessage, metadata);
+
+        if (!msg) {
+            continue;
+        }
+
         if (processUndelivered) {
             sendLoadedMessage(msg, metadata);
         }
@@ -838,8 +882,10 @@ ChatForm::MessageMetadata ChatForm::getMessageMetadata(History::HistMessage cons
     const QDateTime msgDateTime = histMessage.timestamp.toLocalTime();
     const bool isSelf = Core::getInstance()->getSelfId().getPublicKey() == authorPk;
     const bool needSending = !histMessage.isSent && isSelf;
-    const bool isAction = histMessage.message.startsWith(ACTION_PREFIX, Qt::CaseInsensitive);
-    const qint64 id = histMessage.id;
+    const bool isAction =
+        histMessage.content.getType() == HistMessageContentType::message
+        && histMessage.content.asMessage().startsWith(ACTION_PREFIX, Qt::CaseInsensitive);
+    const RowId id = histMessage.id;
     return {isSelf, needSending, isAction, id, authorPk, msgDateTime};
 }
 
@@ -848,11 +894,31 @@ ChatMessage::Ptr ChatForm::chatMessageFromHistMessage(History::HistMessage const
 {
     ToxPk authorPk(ToxId(histMessage.sender).getPublicKey());
     QString authorStr = getMsgAuthorDispName(authorPk, histMessage.dispName);
-    QString messageText =
-        metadata.isAction ? histMessage.message.mid(ACTION_PREFIX.length()) : histMessage.message;
-    ChatMessage::MessageType type = metadata.isAction ? ChatMessage::ACTION : ChatMessage::NORMAL;
     QDateTime dateTime = metadata.needSending ? QDateTime() : metadata.msgDateTime;
-    auto msg = ChatMessage::createChatMessage(authorStr, messageText, type, metadata.isSelf, dateTime);
+
+
+    ChatMessage::Ptr msg;
+
+    switch (histMessage.content.getType()) {
+    case HistMessageContentType::message: {
+        ChatMessage::MessageType type = metadata.isAction ? ChatMessage::ACTION : ChatMessage::NORMAL;
+        auto& message = histMessage.content.asMessage();
+        QString messageText = metadata.isAction ? message.mid(ACTION_PREFIX.length()) : message;
+
+        msg = ChatMessage::createChatMessage(authorStr, messageText, type, metadata.isSelf, dateTime);
+        break;
+    }
+    case HistMessageContentType::file: {
+        auto& file = histMessage.content.asFile();
+        bool isMe = file.direction == ToxFile::SENDING;
+        msg = ChatMessage::createFileTransferMessage(authorStr, file, isMe, dateTime);
+        break;
+    }
+    default:
+        qCritical() << "Invalid HistMessageContentType";
+        assert(false);
+    }
+
     if (!metadata.isAction && needsToHideName(authorPk, metadata.msgDateTime)) {
         msg->hideSender();
     }
@@ -865,13 +931,13 @@ void ChatForm::sendLoadedMessage(ChatMessage::Ptr chatMsg, MessageMetadata const
         return;
     }
 
-    int receipt = 0;
+    ReceiptNum receipt{0};
     if (f->getStatus() != Status::Offline) {
         Core* core = Core::getInstance();
         uint32_t friendId = f->getId();
         QString stringMsg = chatMsg->toString();
-        receipt = metadata.isAction ? core->sendAction(friendId, stringMsg)
-                                    : core->sendMessage(friendId, stringMsg);
+        metadata.isAction ? core->sendAction(friendId, stringMsg, receipt)
+                          : core->sendMessage(friendId, stringMsg, receipt);
     }
     getOfflineMsgEngine()->registerReceipt(receipt, metadata.id, chatMsg);
 }
@@ -1056,11 +1122,11 @@ void ChatForm::SendMessageStr(QString msg)
             historyPart = ACTION_PREFIX + part;
         }
 
-        int rec = 0;
+        ReceiptNum receipt{0};
         if (f->getStatus() != Status::Offline) {
             Core* core = Core::getInstance();
             uint32_t friendId = f->getId();
-            rec = isAction ? core->sendAction(friendId, part) : core->sendMessage(friendId, part);
+            isAction ? core->sendAction(friendId, part, receipt) : core->sendMessage(friendId, part, receipt);
         }
 
         ChatMessage::Ptr ma = createSelfMessage(part, timestamp, isAction, false);
@@ -1072,8 +1138,8 @@ void ChatForm::SendMessageStr(QString msg)
             QString name = Core::getInstance()->getUsername();
             bool isSent = !Settings::getInstance().getFauxOfflineMessaging();
             history->addNewMessage(pk, historyPart, selfPk, timestamp, isSent, name,
-                                   [offMsgEngine, rec, ma](int64_t id) {
-                                       offMsgEngine->registerReceipt(rec, id, ma);
+                                   [offMsgEngine, receipt, ma](RowId id) {
+                                       offMsgEngine->registerReceipt(receipt, id, ma);
                                    });
         } else {
             // TODO: Make faux-offline messaging work partially with the history disabled
@@ -1135,13 +1201,17 @@ void ChatForm::onExportChat()
 
     QString buffer;
     for (const auto& it : msgs) {
+        if (it.content.getType() != HistMessageContentType::message) {
+            continue;
+        }
         QString timestamp = it.timestamp.time().toString("hh:mm:ss");
         QString datestamp = it.timestamp.date().toString("yyyy-MM-dd");
         ToxPk authorPk(ToxId(it.sender).getPublicKey());
         QString author = getMsgAuthorDispName(authorPk, it.dispName);
 
         buffer = buffer
-                 % QString{datestamp % '\t' % timestamp % '\t' % author % '\t' % it.message % '\n'};
+                 % QString{datestamp % '\t' % timestamp % '\t' % author % '\t'
+                           % it.content.asMessage() % '\n'};
     }
     file.write(buffer.toUtf8());
     file.close();

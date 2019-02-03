@@ -176,12 +176,13 @@ void GroupChatForm::onUserListChanged()
 {
     updateUserCount();
     updateUserNames();
+    sendJoinLeaveMessages();
 
     // Enable or disable call button
     const int peersCount = group->getPeersCount();
     const bool online = peersCount > 1;
     headWidget->updateCallButtons(online, inCall);
-    if (!online || !group->isAvGroupchat()) {
+    if (inCall && (!online || !group->isAvGroupchat())) {
         Core::getInstance()->getAv()->leaveGroupCall(group->getId());
         hideNetcam();
     }
@@ -261,11 +262,11 @@ void GroupChatForm::updateUserNames()
      * and then sort them by their text and add them to the layout in that order */
     const auto selfPk = Core::getInstance()->getSelfPublicKey();
     for (const auto& peerPk : peers.keys()) {
-        const QString fullName = peers.value(peerPk);
+        const QString fullName = FriendList::decideNickname(peerPk, peers.value(peerPk));
         const QString editedName = editName(fullName).append(QLatin1String(", "));
         QLabel* const label = new QLabel(editedName);
         if (editedName != fullName) {
-            label->setToolTip(fullName);
+            label->setToolTip(fullName + " (" + peerPk.toString() + ")");
         }
         label->setTextFormat(Qt::PlainText);
         label->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -307,6 +308,63 @@ void GroupChatForm::updateUserNames()
     }
 }
 
+void GroupChatForm::sendJoinLeaveMessages()
+{
+    const auto peers = group->getPeerList();
+
+    // no need to do anything without any peers
+    if (peers.isEmpty()) {
+        return;
+    }
+
+    // generate user list from the current group if it's empty
+    if (groupLast.isEmpty()) {
+        groupLast = group->getPeerList();
+        return;
+    }
+
+    // user joins
+    for (const auto& peerPk : peers.keys()) {
+        const QString name = FriendList::decideNickname(peerPk, peers.value(peerPk));
+        if (!firstTime.value(peerPk, false)) {
+            if (!groupLast.contains(peerPk)) {
+                if (group->peerHasNickname(peerPk)) {
+                    firstTime[peerPk] = true;
+                    groupLast.insert(peerPk, name);
+                    addSystemInfoMessage(tr("%1 is online").arg(name), ChatMessage::INFO, QDateTime::currentDateTime());
+                    continue;
+                }
+                addSystemInfoMessage(tr("A new user has connected to the group"), ChatMessage::INFO, QDateTime::currentDateTime());
+            }
+            firstTime[peerPk] = true;
+            continue;
+        }
+        if (!groupLast.contains(peerPk)) {
+            groupLast.insert(peerPk, name);
+            addSystemInfoMessage(tr("%1 has joined the group").arg(name), ChatMessage::INFO, QDateTime::currentDateTime());
+        } else {
+            Friend *f = FriendList::findFriend(peerPk);
+            if (groupLast[peerPk] != name
+                    && peers.value(peerPk) == name
+                    && peerPk != Core::getInstance()->getSelfPublicKey() // ignore myself
+                    && !(f != nullptr && f->hasAlias()) // ignore friends with aliases
+                    ) {
+                addSystemInfoMessage(tr("%1 is now known as %2").arg(groupLast[peerPk], name), ChatMessage::INFO, QDateTime::currentDateTime());
+                groupLast[peerPk] = name;
+            }
+        }
+    }
+    // user leaves
+    for (const auto& peerPk : groupLast.keys()) {
+        const QString name = FriendList::decideNickname(peerPk, groupLast.value(peerPk));
+        if (!peers.contains(peerPk)) {
+            groupLast.remove(peerPk);
+            firstTime.remove(peerPk);
+            addSystemInfoMessage(tr("%1 has left the group").arg(name), ChatMessage::INFO, QDateTime::currentDateTime());
+        }
+    }
+}
+
 void GroupChatForm::peerAudioPlaying(ToxPk peerPk)
 {
     peerLabels[peerPk]->setProperty("playingAudio", LABEL_PEER_PLAYING_AUDIO);
@@ -318,8 +376,10 @@ void GroupChatForm::peerAudioPlaying(ToxPk peerPk)
             if (netcam) {
                 static_cast<GroupNetCamView*>(netcam)->removePeer(peerPk);
             }
-
-            peerLabels[peerPk]->setProperty("playingAudio", LABEL_PEER_NOT_PLAYING_AUDIO);
+            auto it = peerLabels.find(peerPk);
+            if (it != peerLabels.end()) {
+                peerLabels[peerPk]->setProperty("playingAudio", LABEL_PEER_NOT_PLAYING_AUDIO);
+            }
             delete peerAudioTimers[peerPk];
             peerAudioTimers[peerPk] = nullptr;
         });
@@ -409,17 +469,8 @@ void GroupChatForm::onCallClicked()
 
 GenericNetCamView* GroupChatForm::createNetcam()
 {
-    GroupNetCamView* view = new GroupNetCamView(group->getId(), this);
-
-    const auto& names = group->getPeerList();
-    const auto ownPk = Core::getInstance()->getSelfPublicKey();
-    for (const auto& peerPk : names.keys()) {
-        if (peerPk != ownPk) {
-            static_cast<GroupNetCamView*>(view)->addPeer(peerPk, names.find(peerPk).value());
-        }
-    }
-
-    return view;
+    // leave view empty, it will pe populated once we receive audio from peers
+    return new GroupNetCamView(group->getId(), this);
 }
 
 void GroupChatForm::keyPressEvent(QKeyEvent* ev)

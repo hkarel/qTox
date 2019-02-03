@@ -69,6 +69,8 @@ class QTimer;
 class SettingsWidget;
 class SystemTrayIcon;
 class VideoSurface;
+class UpdateCheck;
+class Settings;
 
 class Widget final : public QMainWindow
 {
@@ -165,16 +167,15 @@ public slots:
     void onFriendMessageReceived(int friendId, const QString& message, bool isAction);
     void onFriendRequestReceived(const ToxPk& friendPk, const QString& message);
     void updateFriendActivity(const Friend* frnd);
-    void onMessageSendResult(uint32_t friendId, const QString& message, int messageId);
-    void onReceiptRecieved(int friendId, int receipt);
-    void onEmptyGroupCreated(int groupId);
+    void onReceiptRecieved(int friendId, ReceiptNum receipt);
+    void onEmptyGroupCreated(int groupId, const QString& title);
     void onGroupInviteReceived(const GroupInvite& inviteInfo);
     void onGroupInviteAccepted(const GroupInvite& inviteInfo);
     void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
     void onGroupPeerlistChanged(int groupnumber);
     void onGroupPeerNameChanged(int groupnumber, int peernumber, const QString& newName);
     void onGroupTitleChanged(int groupnumber, const QString& author, const QString& title);
-    void onGroupPeerAudioPlaying(int groupnumber, int peernumber);
+    void onGroupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void onGroupSendFailed(int groupId);
     void onFriendTypingChanged(int friendId, bool isTyping);
     void nextContact();
@@ -182,6 +183,8 @@ public slots:
     void onFriendDialogShown(const Friend* f);
     void onGroupDialogShown(Group* g);
     void toggleFullscreen();
+    void refreshPeerListsLocal(const QString &username);
+    void onUpdateAvailable(QString latestVersion, QUrl link);
 
 signals:
     void friendRequestAccepted(const ToxPk& friendPk);
@@ -287,6 +290,7 @@ private:
     ProfileForm* profileForm;
 
     QPointer<SettingsWidget> settingsWidget;
+    std::unique_ptr<UpdateCheck> updateCheck; // ownership should be moved outside Widget once non-singleton
     FilesForm* filesForm;
     static Widget* instance;
     GenericChatroomWidget* activeChatroomWidget;
@@ -303,6 +307,7 @@ private:
     QPushButton* groupInvitesButton;
     unsigned int unreadGroupInvites;
     int icon_size;
+    Settings& settings;
 
     QMap<uint32_t, FriendWidget*> friendWidgets;
     QMap<uint32_t, std::shared_ptr<FriendChatroom>> friendChatrooms;
