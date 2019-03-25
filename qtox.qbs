@@ -335,6 +335,8 @@ Product {
             //"src/net/autoupdate.h",
             "src/net/avatarbroadcaster.cpp",
             "src/net/avatarbroadcaster.h",
+            "src/net/bootstrapnodeupdater.cpp",
+            "src/net/bootstrapnodeupdater.h",
             "src/net/toxme.cpp",
             "src/net/toxme.h",
             "src/net/toxmedata.cpp",
