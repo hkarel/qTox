@@ -26,6 +26,7 @@
 
 #include "chatline.h"
 #include "chatmessage.h"
+#include "src/widget/style.h"
 
 class QGraphicsScene;
 class QGraphicsRectItem;
@@ -53,6 +54,7 @@ public:
     void scrollToLine(ChatLine::Ptr line);
     void selectAll();
     void fontChanged(const QFont& font);
+    void reloadTheme();
 
     QString getSelectedText() const;
 
@@ -69,6 +71,7 @@ public:
 signals:
     void selectionChanged();
     void workerTimeoutFinished();
+    void firstVisibleLineChanged(const ChatLine::Ptr&);
 
 public slots:
     void forceRelayout();
@@ -145,7 +148,7 @@ private:
     int selClickedCol = -1;
     int selFirstRow = -1;
     int selLastRow = -1;
-    QColor selectionRectColor = QColor::fromRgbF(0.23, 0.68, 0.91).lighter(150);
+    QColor selectionRectColor = Style::getColor(Style::SelectText);
     SelectionMode selectionMode = None;
     QPointF clickPos;
     QGraphicsRectItem* selGraphItem = nullptr;

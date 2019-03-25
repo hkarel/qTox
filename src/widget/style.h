@@ -31,20 +31,24 @@ class Style
 public:
     enum ColorPalette
     {
-        Green,
-        Yellow,
-        Red,
-        Black,
-        DarkGrey,
-        MediumGrey,
-        MediumGreyLight,
-        LightGrey,
-        White,
+        TransferGood,
+        TransferWait,
+        TransferBad,
+        TransferMiddle,
+        MainText,
+        NameActive,
+        StatusActive,
+        GroundExtra,
+        GroundBase,
         Orange,
         ThemeDark,
         ThemeMediumDark,
         ThemeMedium,
         ThemeLight,
+        Action,
+        Link,
+        SearchHighlighted,
+        SelectText
     };
 
     enum Font
@@ -56,6 +60,18 @@ public:
         MediumBold,
         Small,
         SmallLight
+    };
+
+    enum MainTheme
+    {
+        Light,
+        Dark
+    };
+
+    struct ThemeNameColor {
+        MainTheme type;
+        QString name;
+        QColor color;
     };
 
     static QStringList getThemeColorNames();
@@ -71,6 +87,9 @@ public:
     static void setThemeColor(const QColor& color);
     static void applyTheme();
     static QPixmap scaleSvgImage(const QString& path, uint32_t width, uint32_t height);
+    static void initPalette();
+    static void initDictColor();
+    static QString getThemePath();
 
 signals:
     void themeChanged();
@@ -79,8 +98,9 @@ private:
     Style();
 
 private:
-    static QList<QColor> themeColorColors;
+    static QList<ThemeNameColor> themeNameColors;
     static std::map<std::pair<const QString, const QFont>, const QString> stylesheetsCache;
+    static QMap<ColorPalette, QString> aliasColors;
 };
 
 #endif // STYLE_H

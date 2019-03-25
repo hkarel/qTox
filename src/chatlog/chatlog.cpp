@@ -23,6 +23,7 @@
 #include "chatmessage.h"
 #include "content/filetransferwidget.h"
 #include "src/widget/translator.h"
+#include "src/widget/style.h"
 
 #include <QAction>
 #include <QApplication>
@@ -65,7 +66,7 @@ ChatLog::ChatLog(QWidget* parent)
     setDragMode(QGraphicsView::NoDrag);
     setViewportUpdateMode(MinimalViewportUpdate);
     setContextMenuPolicy(Qt::CustomContextMenu);
-    setBackgroundBrush(QBrush(Qt::white, Qt::SolidPattern));
+    setBackgroundBrush(QBrush(Style::getColor(Style::GroundBase), Qt::SolidPattern));
 
     // The selection rect for multi-line selection
     selGraphItem = scene->addRect(0, 0, 0, 0, selectionRectColor.darker(120), selectionRectColor);
@@ -659,6 +660,18 @@ void ChatLog::fontChanged(const QFont& font)
     }
 }
 
+void ChatLog::reloadTheme()
+{
+    setBackgroundBrush(QBrush(Style::getColor(Style::GroundBase), Qt::SolidPattern));
+    selectionRectColor = Style::getColor(Style::SelectText);
+    selGraphItem->setBrush(QBrush(selectionRectColor));
+    selGraphItem->setPen(QPen(selectionRectColor.darker(120)));
+
+    for (ChatLine::Ptr l : lines) {
+        l->reloadTheme();
+    }
+}
+
 void ChatLog::forceRelayout()
 {
     startResizeWorker();
@@ -700,6 +713,10 @@ void ChatLog::checkVisibility()
     // if (!visibleLines.empty())
     //  qDebug() << "visible from " << visibleLines.first()->getRow() << "to " <<
     //  visibleLines.last()->getRow() << " total " << visibleLines.size();
+
+    if (!visibleLines.isEmpty()) {
+        emit firstVisibleLineChanged(visibleLines.at(0));
+    }
 }
 
 void ChatLog::scrollContentsBy(int dx, int dy)

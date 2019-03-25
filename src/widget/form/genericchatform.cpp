@@ -133,13 +133,17 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
     : QWidget(parent, Qt::Window)
     , audioInputFlag(false)
     , audioOutputFlag(false)
+    , searchAfterLoadHistory(false)
 {
     curRow = 0;
     headWidget = new ChatFormHeader();
     searchForm = new SearchForm();
+    dateInfo = new QLabel(this);
     chatWidget = new ChatLog(this);
     chatWidget->setBusyNotification(ChatMessage::createBusyNotification());
     searchForm->hide();
+    dateInfo->setAlignment(Qt::AlignHCenter);
+    dateInfo->setVisible(false);
 
     // settings
     const Settings& s = Settings::getInstance();
@@ -169,8 +173,6 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
     fileLayout->setSpacing(0);
     fileLayout->setMargin(0);
 
-    msgEdit->setStyleSheet(Style::getStylesheet("msgEdit/msgEdit.css")
-                           + fontToCss(s.getChatMessageFont(), "QTextEdit"));
     msgEdit->setFixedHeight(MESSAGE_EDIT_HEIGHT);
     msgEdit->setFrameStyle(QFrame::NoFrame);
 
@@ -199,6 +201,7 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
 
     QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
     contentLayout->addWidget(searchForm);
+    contentLayout->addWidget(dateInfo);
     contentLayout->addWidget(chatWidget);
     contentLayout->addLayout(mainFootLayout);
 
@@ -228,6 +231,7 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
 
     connect(chatWidget, &ChatLog::customContextMenuRequested, this,
             &GenericChatForm::onChatContextMenuRequested);
+    connect(chatWidget, &ChatLog::firstVisibleLineChanged, this, &GenericChatForm::updateShowDateInfo);
 
     connect(searchForm, &SearchForm::searchInBegin, this, &GenericChatForm::searchInBegin);
     connect(searchForm, &SearchForm::searchUp, this, &GenericChatForm::onSearchUp);
@@ -237,8 +241,7 @@ GenericChatForm::GenericChatForm(const Contact* contact, QWidget* parent)
 
     connect(chatWidget, &ChatLog::workerTimeoutFinished, this, &GenericChatForm::onContinueSearch);
 
-    chatWidget->setStyleSheet(Style::getStylesheet("chatArea/chatArea.css"));
-    headWidget->setStyleSheet(Style::getStylesheet("chatArea/chatHead.css"));
+    reloadTheme();
 
     fileFlyout->setFixedSize(FILE_FLYOUT_SIZE);
     fileFlyout->setParent(this);
@@ -290,6 +293,26 @@ QDate GenericChatForm::getLatestDate() const
 QDate GenericChatForm::getFirstDate() const
 {
     return getDate(chatWidget->getFirstLine());
+}
+
+void GenericChatForm::reloadTheme()
+{
+    const Settings& s = Settings::getInstance();
+    setStyleSheet(Style::getStylesheet("genericChatForm/genericChatForm.css"));
+
+    msgEdit->setStyleSheet(Style::getStylesheet("msgEdit/msgEdit.css")
+                           + fontToCss(s.getChatMessageFont(), "QTextEdit"));
+
+    chatWidget->setStyleSheet(Style::getStylesheet("chatArea/chatArea.css"));
+    headWidget->setStyleSheet(Style::getStylesheet("chatArea/chatHead.css"));
+    chatWidget->reloadTheme();
+    headWidget->reloadTheme();
+    searchForm->reloadTheme();
+
+    emoteButton->setStyleSheet(Style::getStylesheet(STYLE_PATH));
+    fileButton->setStyleSheet(Style::getStylesheet(STYLE_PATH));
+    screenshotButton->setStyleSheet(Style::getStylesheet(STYLE_PATH));
+    sendButton->setStyleSheet(Style::getStylesheet(STYLE_PATH));
 }
 
 void GenericChatForm::setName(const QString& newName)
@@ -974,6 +997,19 @@ void GenericChatForm::onSearchTriggered()
     } else {
         searchPoint = QPoint(1, -1);
         searchAfterLoadHistory = false;
+    }
+}
+
+void GenericChatForm::updateShowDateInfo(const ChatLine::Ptr& line)
+{
+    const auto date = getDate(line);
+
+    if (date.isValid() && date != QDate::currentDate()) {
+        const auto dateText = QStringLiteral("<b>%1<\b>").arg(date.toString(Settings::getInstance().getDateFormat()));
+        dateInfo->setText(dateText);
+        dateInfo->setVisible(true);
+    } else {
+        dateInfo->setVisible(false);
     }
 }
 

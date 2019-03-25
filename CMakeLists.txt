@@ -12,7 +12,9 @@ option(USE_FILTERAUDIO "Enable the echo canceling backend" ON)
 option(UPDATE_CHECK "Enable automatic update check" ON)
 option(USE_CCACHE "Use ccache when available" ON)
 option(SPELL_CHECK "Enable spell cheching support" ON)
+option(SVGZ_ICON "Compress the SVG icon of qTox" ON)
 option(ASAN "Compile with AddressSanitizer" OFF)
+option(DESKTOP_NOTIFICATIONS "Use snorenotify for desktop notifications" OFF)
 
 # process generated files if cmake >= 3.10
 if(POLICY CMP0071)
@@ -649,6 +651,17 @@ else()
     message(STATUS "NOT using update check")
 endif()
 
+if (${DESKTOP_NOTIFICATIONS})
+    add_definitions(-DDESKTOP_NOTIFICATIONS=1)
+    set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+        src/platform/desktop_notifications/desktopnotify.cpp
+        src/platform/desktop_notifications/desktopnotify.h)
+    message(STATUS "using desktop notifications")
+else()
+    add_definitions(-DDESKTOP_NOTIFICATIONS=0)
+    message(STATUS "not using desktop notifications")
+endif()
+
 if (MINGW)
   STRING(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
   if (CMAKE_BUILD_TYPE_LOWER MATCHES debug)
@@ -667,7 +680,8 @@ add_library(${PROJECT_NAME}_static
   STATIC
   ${${PROJECT_NAME}_FORMS}
   ${${PROJECT_NAME}_SOURCES}
-  ${${PROJECT_NAME}_QM_FILES})
+  ${${PROJECT_NAME}_QM_FILES}
+  ${${PROJECT_NAME}_RESOURCES})
 target_link_libraries(${PROJECT_NAME}_static
   ${ALL_LIBRARIES})
 

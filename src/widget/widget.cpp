@@ -150,14 +150,11 @@ void Widget::init()
     connect(actionQuit, &QAction::triggered, qApp, &QApplication::quit);
 
     layout()->setContentsMargins(0, 0, 0, 0);
-    ui->centralwidget->setStyleSheet(Style::getStylesheet(QStringLiteral("centralWidget/centralWidget.css")));
-    ui->friendList->setStyleSheet(Style::getStylesheet("friendList/friendList.css"));
 
     profilePicture = new MaskablePixmapWidget(this, QSize(40, 40), ":/img/avatar_mask.svg");
     profilePicture->setPixmap(QPixmap(":/img/contact_dark.svg"));
     profilePicture->setClickable(true);
     profilePicture->setObjectName("selfAvatar");
-    profilePicture->setStyleSheet(Style::getStylesheet("window/profile.css"));
     ui->myProfile->insertWidget(0, profilePicture);
     ui->myProfile->insertSpacing(1, 7);
 
@@ -200,18 +197,12 @@ void Widget::init()
 
     ui->searchContactFilterBox->setMenu(filterMenu);
 
-#ifndef Q_OS_MAC
-    ui->statusHead->setStyleSheet(Style::getStylesheet("window/statusPanel.css"));
-#endif
-
     contactListWidget = new FriendListWidget(this, settings.getGroupchatPosition());
     ui->friendList->setWidget(contactListWidget);
     ui->friendList->setLayoutDirection(Qt::RightToLeft);
     ui->friendList->setContextMenuPolicy(Qt::CustomContextMenu);
 
     ui->statusLabel->setEditable(true);
-
-    ui->statusPanel->setStyleSheet(Style::getStylesheet("window/statusPanel.css"));
 
     QMenu* statusButtonMenu = new QMenu(ui->statusButton);
     statusButtonMenu->addAction(statusOnline);
@@ -229,8 +220,6 @@ void Widget::init()
     ui->statusButton->setEnabled(false);
 
     Style::setThemeColor(settings.getThemeColor());
-    reloadTheme();
-    updateIcons();
 
     filesForm = new FilesForm();
     addFriendForm = new AddFriendForm;
@@ -397,6 +386,8 @@ void Widget::init()
     connect(&settings, &Settings::groupchatPositionChanged, contactListWidget,
             &FriendListWidget::onGroupchatPositionChanged);
 
+    reloadTheme();
+    updateIcons();
     retranslateUi();
     Translator::registerHandler(std::bind(&Widget::retranslateUi, this), this);
 
@@ -677,6 +668,8 @@ void Widget::onSeparateWindowChanged(bool separate, bool clicked)
         }
 
         QWidget* contentWidget = new QWidget(this);
+        contentWidget->setObjectName("contentWidget");
+
         contentLayout = new ContentLayout(contentWidget);
         ui->mainSplitter->addWidget(contentWidget);
 
@@ -1364,6 +1357,9 @@ bool Widget::newFriendMessageAlert(int friendId, bool sound)
         f->setEventFlag(true);
         widget->updateStatusLight();
         ui->friendList->trackWidget(widget);
+#if DESKTOP_NOTIFICATIONS
+        notifier.notifyFriendMessage();
+#endif
 
         if (contentDialog == nullptr) {
             if (hasActive) {
@@ -1401,6 +1397,9 @@ bool Widget::newGroupMessageAlert(int groupId, bool notify)
 
     g->setEventFlag(true);
     widget->updateStatusLight();
+#if DESKTOP_NOTIFICATIONS
+    notifier.notifyGroupMessage();
+#endif
 
     if (contentDialog == nullptr) {
         if (hasActive) {
@@ -1447,7 +1446,13 @@ bool Widget::newMessageAlert(QWidget* currentWindow, bool isActive, bool sound, 
 
         if (settings.getNotify()) {
             if (inactiveWindow) {
+#if DESKTOP_NOTIFICATIONS
+                if (!settings.getDesktopNotify()) {
+                    QApplication::alert(currentWindow);
+                }
+#else
                 QApplication::alert(currentWindow);
+#endif
                 eventFlag = true;
             }
             bool isBusy = Nexus::getCore()->getStatus() == Status::Busy;
@@ -1469,6 +1474,9 @@ void Widget::onFriendRequestReceived(const ToxPk& friendPk, const QString& messa
     if (addFriendForm->addFriendRequest(friendPk.toString(), message)) {
         friendRequestsUpdate();
         newMessageAlert(window(), isActiveWindow(), true, true);
+#if DESKTOP_NOTIFICATIONS
+        notifier.notifyFriendRequest();
+#endif
     }
 }
 
@@ -1713,6 +1721,9 @@ void Widget::onGroupInviteReceived(const GroupInvite& inviteInfo)
             ++unreadGroupInvites;
             groupInvitesUpdate();
             newMessageAlert(window(), isActiveWindow(), true, true);
+#if DESKTOP_NOTIFICATIONS
+            notifier.notifyGroupInvite();
+#endif
         }
     } else {
         qWarning() << "onGroupInviteReceived: Unknown groupchat type:" << confType;
@@ -2174,12 +2185,19 @@ void Widget::reloadTheme()
 {
     this->setStyleSheet(Style::getStylesheet("window/general.css"));
     QString statusPanelStyle = Style::getStylesheet("window/statusPanel.css");
+    ui->centralwidget->setStyleSheet(Style::getStylesheet(QStringLiteral("centralWidget/centralWidget.css")));
     ui->tooliconsZone->setStyleSheet(Style::getStylesheet("tooliconsZone/tooliconsZone.css"));
     ui->statusPanel->setStyleSheet(statusPanelStyle);
     ui->statusHead->setStyleSheet(statusPanelStyle);
     ui->friendList->setStyleSheet(Style::getStylesheet("friendList/friendList.css"));
     ui->statusButton->setStyleSheet(Style::getStylesheet("statusButton/statusButton.css"));
     contactListWidget->reDraw();
+
+    profilePicture->setStyleSheet(Style::getStylesheet("window/profile.css"));
+
+    if (contentLayout != nullptr) {
+        contentLayout->reloadTheme();
+    }
 
     for (Friend* f : FriendList::getAllFriends()) {
         uint32_t friendId = f->getId();
@@ -2189,6 +2207,15 @@ void Widget::reloadTheme()
     for (Group* g : GroupList::getAllGroups()) {
         uint32_t groupId = g->getId();
         groupWidgets[groupId]->reloadTheme();
+    }
+
+
+    for (auto f : FriendList::getAllFriends()) {
+        chatForms[f->getId()]->reloadTheme();
+    }
+
+    for (auto g : GroupList::getAllGroups()) {
+        groupChatForms[g->getId()]->reloadTheme();
     }
 }
 
