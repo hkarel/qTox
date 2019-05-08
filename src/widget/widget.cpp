@@ -1234,7 +1234,7 @@ void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& messa
 
 void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
 {
-    uint32_t friendId = frnd->getId();
+    //uint32_t friendId = frnd->getId();
     const ToxPk& friendPk = frnd->getPublicKey();
     ContentDialog* contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendPk);
     bool isSeparate = settings.getSeparateWindow();
