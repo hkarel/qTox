@@ -23,6 +23,8 @@
 #include "contact.h"
 #include "src/core/core.h"
 #include "src/core/toxid.h"
+#include "src/core/contactid.h"
+#include "src/model/status.h"
 #include <QObject>
 #include <QString>
 
@@ -47,15 +49,17 @@ public:
 
     const ToxPk& getPublicKey() const;
     uint32_t getId() const override;
+    const ContactId& getPersistentId() const override;
 
-    void setStatus(Status s);
-    Status getStatus() const;
+    void setStatus(Status::Status s);
+    Status::Status getStatus() const;
+    bool isOnline() const;
 
 signals:
-    void nameChanged(uint32_t friendId, const QString& name);
-    void aliasChanged(uint32_t friendId, QString alias);
-    void statusChanged(uint32_t friendId, Status status);
-    void statusMessageChanged(uint32_t friendId, const QString& message);
+    void nameChanged(const ToxPk& friendId, const QString& name);
+    void aliasChanged(const ToxPk& friendId, QString alias);
+    void statusChanged(const ToxPk& friendId, Status::Status status);
+    void statusMessageChanged(const ToxPk& friendId, const QString& message);
     void loadChatHistory();
 
 public slots:
@@ -67,7 +71,7 @@ private:
     ToxPk friendPk;
     uint32_t friendId;
     bool hasNewEvents;
-    Status friendStatus;
+    Status::Status friendStatus;
 };
 
 #endif // FRIEND_H

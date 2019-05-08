@@ -22,6 +22,9 @@
 #include "src/friendlist.h"
 #include "src/core/core.h"
 #include "src/core/coreav.h"
+#include "src/core/contactid.h"
+#include "src/core/groupid.h"
+#include "src/core/toxpk.h"
 #include "src/persistence/settings.h"
 #include "src/widget/form/groupchatform.h"
 #include "src/widget/groupwidget.h"
@@ -29,10 +32,11 @@
 
 static const int MAX_GROUP_TITLE_LENGTH = 128;
 
-Group::Group(int groupId, const QString& name, bool isAvGroupchat, const QString& selfName)
+Group::Group(int groupId, const GroupId persistentGroupId, const QString& name, bool isAvGroupchat, const QString& selfName)
     : selfName{selfName}
     , title{name}
     , groupId(groupId)
+    , persistentGroupId{persistentGroupId}
     , avGroupchat{isAvGroupchat}
 {
     // in groupchats, we only notify on messages containing your name <-- dumb
@@ -48,7 +52,7 @@ void Group::updatePeer(int peerId, QString name)
     ToxPk peerKey = Core::getInstance()->getGroupPeerPk(groupId, peerId);
     toxpks[peerKey] = name;
     qDebug() << "name change: " + name;
-    emit userListChanged(groupId, toxpks);
+    emit userListChanged(persistentGroupId, toxpks);
 }
 
 void Group::setName(const QString& newTitle)
@@ -57,8 +61,8 @@ void Group::setName(const QString& newTitle)
     if (!shortTitle.isEmpty() && title != shortTitle) {
         title = shortTitle;
         emit displayedNameChanged(title);
-        emit titleChangedByUser(groupId, title);
-        emit titleChanged(groupId, selfName, title);
+        emit titleChangedByUser(persistentGroupId, title);
+        emit titleChanged(persistentGroupId, selfName, title);
     }
 }
 
@@ -68,7 +72,7 @@ void Group::setTitle(const QString& author, const QString& newTitle)
     if (!shortTitle.isEmpty() && title != shortTitle) {
         title = shortTitle;
         emit displayedNameChanged(title);
-        emit titleChanged(groupId, author, title);
+        emit titleChanged(persistentGroupId, author, title);
     }
 }
 
@@ -110,7 +114,7 @@ void Group::regeneratePeerList()
     if (avGroupchat) {
         stopAudioOfDepartedPeers(oldPeers, toxpks);
     }
-    emit userListChanged(groupId, toxpks);
+    emit userListChanged(persistentGroupId, toxpks);
 }
 
 bool Group::peerHasNickname(ToxPk pk)
@@ -121,7 +125,7 @@ bool Group::peerHasNickname(ToxPk pk)
 void Group::updateUsername(ToxPk pk, const QString newName)
 {
     toxpks[pk] = newName;
-    emit userListChanged(groupId, toxpks);
+    emit userListChanged(persistentGroupId, toxpks);
 }
 
 bool Group::isAvGroupchat() const
@@ -132,6 +136,11 @@ bool Group::isAvGroupchat() const
 uint32_t Group::getId() const
 {
     return groupId;
+}
+
+const GroupId& Group::getPersistentId() const
+{
+    return persistentGroupId;
 }
 
 int Group::getPeersCount() const

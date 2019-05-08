@@ -29,6 +29,7 @@
 #include "src/model/chatroom/friendchatroom.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
+#include "src/model/status.h"
 #include "src/persistence/settings.h"
 #include "src/widget/about/aboutfriendform.h"
 #include "src/widget/contentdialogmanager.h"
@@ -62,7 +63,7 @@ FriendWidget::FriendWidget(std::shared_ptr<FriendChatroom> chatroom, bool compac
     , isDefaultAvatar{true}
 {
     avatar->setPixmap(QPixmap(":/img/contact.svg"));
-    statusPic.setPixmap(QPixmap(":/img/status/offline.svg"));
+    statusPic.setPixmap(QPixmap(Status::getIconPath(Status::Status::Offline)));
     statusPic.setMargin(3);
 
     auto frnd = chatroom->getFriend();
@@ -105,8 +106,8 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     QMenu menu;
 
     const auto frnd = chatroom->getFriend();
-    const auto friendId = frnd->getId();
-    const auto contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendId);
+    const auto friendPk = frnd->getPublicKey();
+    const auto contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendPk);
 
     // TODO: move to model
     if (!contentDialog || contentDialog->chatroomWidgetCount() > 1) {
@@ -115,7 +116,7 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     }
 
     // TODO: move to model
-    if (contentDialog && contentDialog->hasFriendWidget(friendId)) {
+    if (contentDialog && contentDialog->hasContactWidget(friendPk)) {
         const auto removeChatWindow = menu.addAction(tr("Remove chat from this window"));
         connect(removeChatWindow, &QAction::triggered, this, &FriendWidget::removeChatWindow);
     }
@@ -170,10 +171,10 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
     menu.addSeparator();
 
     // TODO: move to model
-    if (!contentDialog || !contentDialog->hasFriendWidget(friendId)) {
+    if (!contentDialog || !contentDialog->hasContactWidget(friendPk)) {
         const auto removeAction =
             menu.addAction(tr("Remove friend", "Menu to remove the friend from our friendlist"));
-        connect(removeAction, &QAction::triggered, this, [=]() { emit removeFriend(friendId); },
+        connect(removeAction, &QAction::triggered, this, [=]() { emit removeFriend(friendPk); },
                 Qt::QueuedConnection);
     }
 
@@ -194,9 +195,9 @@ void FriendWidget::onContextMenuCalled(QContextMenuEvent* event)
 void FriendWidget::removeChatWindow()
 {
     const auto frnd = chatroom->getFriend();
-    const auto friendId = frnd->getId();
-    ContentDialog* contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendId);
-    contentDialog->removeFriend(friendId);
+    const auto friendPk = frnd->getPublicKey();
+    ContentDialog* contentDialog = ContentDialogManager::getInstance()->getFriendDialog(friendPk);
+    contentDialog->removeFriend(friendPk);
 }
 
 namespace {
@@ -322,23 +323,9 @@ void FriendWidget::setActive(bool active)
 
 void FriendWidget::updateStatusLight()
 {
-    // clang-format off
-    static const QString statuses[] = {
-        ":img/status/online.svg",
-        ":img/status/online_notification.svg",
-        ":img/status/away.svg",
-        ":img/status/away_notification.svg",
-        ":img/status/busy.svg",
-        ":img/status/busy_notification.svg",
-        ":img/status/offline.svg",
-        ":img/status/offline_notification.svg",
-    };
-    // clang-format on
-
     const auto frnd = chatroom->getFriend();
     const bool event = frnd->getEventFlag();
-    const int index = static_cast<int>(frnd->getStatus()) * 2 + event;
-    statusPic.setPixmap(QPixmap(statuses[index]));
+    statusPic.setPixmap(QPixmap(Status::getIconPath(frnd->getStatus(), event)));
 
     if (event) {
         const Settings& s = Settings::getInstance();
@@ -373,6 +360,11 @@ QString FriendWidget::getStatusString() const
 const Friend* FriendWidget::getFriend() const
 {
     return chatroom->getFriend();
+}
+
+const Contact* FriendWidget::getContact() const
+{
+    return getFriend();
 }
 
 void FriendWidget::search(const QString& searchString, bool hide)
@@ -434,7 +426,9 @@ void FriendWidget::mouseMoveEvent(QMouseEvent* ev)
     const int distance = (dragStartPos - ev->pos()).manhattanLength();
     if (distance > QApplication::startDragDistance()) {
         QMimeData* mdata = new QMimeData;
-        mdata->setText(getFriend()->getPublicKey().toString());
+        const Friend* frnd = getFriend();
+        mdata->setText(frnd->getDisplayedName());
+        mdata->setData("toxPk", frnd->getPublicKey().getByteArray());
 
         QDrag* drag = new QDrag(this);
         drag->setMimeData(mdata);

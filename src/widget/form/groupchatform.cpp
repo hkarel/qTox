@@ -22,6 +22,7 @@
 #include "tabcompleter.h"
 #include "src/core/core.h"
 #include "src/core/coreav.h"
+#include "src/core/groupid.h"
 #include "src/chatlog/chatlog.h"
 #include "src/chatlog/content/text.h"
 #include "src/model/friend.h"
@@ -187,7 +188,7 @@ void GroupChatForm::onUserListChanged()
     }
 }
 
-void GroupChatForm::onTitleChanged(uint32_t groupId, const QString& author, const QString& title)
+void GroupChatForm::onTitleChanged(const GroupId& groupId, const QString& author, const QString& title)
 {
     Q_UNUSED(groupId);
     if (author.isEmpty()) {
@@ -397,22 +398,28 @@ void GroupChatForm::peerAudioPlaying(ToxPk peerPk)
 
 void GroupChatForm::dragEnterEvent(QDragEnterEvent* ev)
 {
-    ToxId toxId = ToxId(ev->mimeData()->text());
-    Friend* frnd = FriendList::findFriend(toxId.getPublicKey());
+    if (!ev->mimeData()->hasFormat("toxPk")) {
+        return;
+    }
+    ToxPk toxPk{ev->mimeData()->data("toxPk")};
+    Friend* frnd = FriendList::findFriend(toxPk);
     if (frnd)
         ev->acceptProposedAction();
 }
 
 void GroupChatForm::dropEvent(QDropEvent* ev)
 {
-    ToxId toxId = ToxId(ev->mimeData()->text());
-    Friend* frnd = FriendList::findFriend(toxId.getPublicKey());
+    if (!ev->mimeData()->hasFormat("toxPk")) {
+        return;
+    }
+    ToxPk toxPk{ev->mimeData()->data("toxPk")};
+    Friend* frnd = FriendList::findFriend(toxPk);
     if (!frnd)
         return;
 
     int friendId = frnd->getId();
     int groupId = group->getId();
-    if (frnd->getStatus() != Status::Offline) {
+    if (frnd->isOnline()) {
         Core::getInstance()->groupInviteFriend(friendId, groupId);
     }
 }
@@ -506,11 +513,7 @@ void GroupChatForm::keyReleaseEvent(QKeyEvent* ev)
 void GroupChatForm::updateUserCount()
 {
     const int peersCount = group->getPeersCount();
-    if (peersCount == 1) {
-        nusersLabel->setText(tr("1 user in chat", "Number of users in chat"));
-    } else {
-        nusersLabel->setText(tr("%1 users in chat", "Number of users in chat").arg(peersCount));
-    }
+    nusersLabel->setText(tr("%n user(s) in chat", "Number of users in chat", peersCount));
 }
 
 void GroupChatForm::retranslateUi()

@@ -22,6 +22,8 @@
 
 #include "contact.h"
 
+#include "src/core/contactid.h"
+#include "src/core/groupid.h"
 #include "src/core/toxpk.h"
 
 #include <QMap>
@@ -32,10 +34,10 @@ class Group : public Contact
 {
     Q_OBJECT
 public:
-    Group(int groupId, const QString& name, bool isAvGroupchat, const QString& selfName);
-
+    Group(int groupId, const GroupId persistentGroupId, const QString& name, bool isAvGroupchat, const QString& selfName);
     bool isAvGroupchat() const;
     uint32_t getId() const override;
+    const GroupId& getPersistentId() const override;
     int getPeersCount() const;
     void regeneratePeerList();
     const QMap<ToxPk, QString>& getPeerList() const;
@@ -58,9 +60,9 @@ public:
     QString getSelfName() const;
 
 signals:
-    void titleChangedByUser(uint32_t groupId, const QString& title);
-    void titleChanged(uint32_t groupId, const QString& author, const QString& title);
-    void userListChanged(uint32_t groupId, const QMap<ToxPk, QString>& toxpks);
+    void titleChangedByUser(const GroupId& groupId, const QString& title);
+    void titleChanged(const GroupId& groupId, const QString& author, const QString& title);
+    void userListChanged(const GroupId& groupId, const QMap<ToxPk, QString>& toxpks);
 
 private:
     void stopAudioOfDepartedPeers(const QList<ToxPk>& oldPks, const QMap<ToxPk, QString>& newPks);
@@ -73,6 +75,7 @@ private:
     bool hasNewMessages;
     bool userWasMentioned;
     int groupId;
+    const GroupId persistentGroupId;
     bool avGroupchat;
 };
 

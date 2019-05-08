@@ -18,8 +18,6 @@
 */
 
 #include "openal.h"
-#include "src/core/core.h"
-#include "src/core/coreav.h"
 #include "src/persistence/settings.h"
 
 #include <QDebug>
@@ -33,16 +31,16 @@
 #include <cassert>
 
 namespace {
-    void applyGain(int16_t* buffer, uint32_t bufferSize, qreal gainFactor)
-    {
-        for (quint32 i = 0; i < bufferSize; ++i) {
-            // gain amplification with clipping to 16-bit boundaries
-            buffer[i] = qBound<int16_t>(std::numeric_limits<int16_t>::min(),
-                                   qRound(buffer[i] * gainFactor),
-                                   std::numeric_limits<int16_t>::max());
-        }
+void applyGain(int16_t* buffer, uint32_t bufferSize, qreal gainFactor)
+{
+    for (quint32 i = 0; i < bufferSize; ++i) {
+        // gain amplification with clipping to 16-bit boundaries
+        buffer[i] =
+            qBound<int16_t>(std::numeric_limits<int16_t>::min(), qRound(buffer[i] * gainFactor),
+                            std::numeric_limits<int16_t>::max());
     }
 }
+} // namespace
 
 /**
  * @class OpenAL
@@ -68,26 +66,30 @@ OpenAL::OpenAL()
     audioThread->setObjectName("qTox Audio");
     QObject::connect(audioThread, &QThread::finished, &voiceTimer, &QTimer::stop);
     QObject::connect(audioThread, &QThread::finished, &captureTimer, &QTimer::stop);
-    QObject::connect(audioThread, &QThread::finished, &playMono16Timer, &QTimer::stop);
     QObject::connect(audioThread, &QThread::finished, audioThread, &QThread::deleteLater);
 
     moveToThread(audioThread);
 
     voiceTimer.setSingleShot(true);
     voiceTimer.moveToThread(audioThread);
-    connect(this, &Audio::startActive, &voiceTimer, static_cast<void (QTimer::*)(int)>(&QTimer::start));
-    connect(&voiceTimer, &QTimer::timeout, this, &Audio::stopActive);
+    connect(this, &OpenAL::startActive, &voiceTimer,
+            static_cast<void (QTimer::*)(int)>(&QTimer::start));
+    connect(&voiceTimer, &QTimer::timeout, this, &OpenAL::stopActive);
 
     connect(&captureTimer, &QTimer::timeout, this, &OpenAL::doAudio);
     captureTimer.setInterval(AUDIO_FRAME_DURATION / 2);
     captureTimer.setSingleShot(false);
     captureTimer.moveToThread(audioThread);
     // TODO for Qt 5.6+: use qOverload
-    connect(audioThread, &QThread::started, &captureTimer, static_cast<void (QTimer::*)(void)>(&QTimer::start));
+    connect(audioThread, &QThread::started, &captureTimer,
+            static_cast<void (QTimer::*)(void)>(&QTimer::start));
 
-    connect(&playMono16Timer, &QTimer::timeout, this, &OpenAL::playMono16SoundCleanup);
-    playMono16Timer.setSingleShot(true);
-    playMono16Timer.moveToThread(audioThread);
+    cleanupTimer.setInterval(1000);
+    cleanupTimer.setSingleShot(false);
+    connect(&cleanupTimer, &QTimer::timeout, this, &OpenAL::cleanupSound);
+    // TODO for Qt 5.6+: use qOverload
+    connect(audioThread, &QThread::started, &cleanupTimer,
+            static_cast<void (QTimer::*)(void)>(&QTimer::start));
 
     audioThread->start();
 }
@@ -215,15 +217,100 @@ qreal OpenAL::maxInputThreshold() const
 void OpenAL::reinitInput(const QString& inDevDesc)
 {
     QMutexLocker locker(&audioLock);
+
+    const auto bakSources = sources;
+    sources.clear();
+
     cleanupInput();
     initInput(inDevDesc);
+
+    locker.unlock();
+    // this must happen outside `audioLock`, to avoid a deadlock when
+    // a slot on AlSource::invalidate tries to create a new source immedeately.
+    for (auto& source : bakSources) {
+        source->kill();
+    }
 }
 
 bool OpenAL::reinitOutput(const QString& outDevDesc)
 {
     QMutexLocker locker(&audioLock);
+
+    const auto bakSinks = sinks;
+
+    sinks.clear();
+
     cleanupOutput();
-    return initOutput(outDevDesc);
+    const bool result = initOutput(outDevDesc);
+
+    locker.unlock();
+    // this must happen outside `audioLock`, to avoid a deadlock when
+    // a slot on AlSink::invalidate tries to create a new source immedeately.
+    for (auto& sink : bakSinks) {
+        sink->kill();
+    }
+
+    return result;
+}
+
+/**
+ * @brief Allocates ressources for a new audio output
+ * @return AudioSink on success, nullptr on failure
+ */
+std::unique_ptr<IAudioSink> OpenAL::makeSink()
+{
+    QMutexLocker locker(&audioLock);
+
+    if (!autoInitOutput()) {
+        qWarning("Failed to subscribe to audio output device.");
+        return {};
+    }
+
+    ALuint sid;
+    alGenSources(1, &sid);
+
+    auto const sink = new AlSink(*this, sid);
+    if (sink == nullptr) {
+        return {};
+    }
+
+    sinks.insert(sink);
+    qDebug() << "Audio source" << sid << "created. Sources active:" << sinks.size();
+
+    return std::unique_ptr<IAudioSink>{sink};
+}
+
+/**
+ * @brief Must be called by the destructor of AlSink to remove the internal ressources.
+ *        If no sinks are opened, the output is closed afterwards.
+ * @param sink Audio sink to remove.
+ */
+void OpenAL::destroySink(AlSink& sink)
+{
+    QMutexLocker locker(&audioLock);
+
+    const auto sinksErased = sinks.erase(&sink);
+    const auto soundSinksErased = soundSinks.erase(&sink);
+
+    if (sinksErased == 0 && soundSinksErased == 0) {
+        qWarning() << "Destroying non-existant source";
+        return;
+    }
+
+    const uint sid = sink.getSourceId();
+
+    if (alIsSource(sid)) {
+        // stop playing, marks all buffers as processed
+        alSourceStop(sid);
+        cleanupBuffers(sid);
+        qDebug() << "Audio source" << sid << "deleted. Sources active:" << sinks.size();
+    } else {
+        qWarning() << "Trying to delete invalid audio source" << sid;
+    }
+
+    if (sinks.empty() && soundSinks.empty()) {
+        cleanupOutput();
+    }
 }
 
 /**
@@ -231,17 +318,25 @@ bool OpenAL::reinitOutput(const QString& outDevDesc)
  *
  * If the input device is not open, it will be opened before capturing.
  */
-void OpenAL::subscribeInput()
+std::unique_ptr<IAudioSource> OpenAL::makeSource()
 {
     QMutexLocker locker(&audioLock);
 
     if (!autoInitInput()) {
         qWarning("Failed to subscribe to audio input device.");
-        return;
+        return {};
     }
 
-    ++inSubscriptions;
-    qDebug() << "Subscribed to audio input device [" << inSubscriptions << "subscriptions ]";
+    auto const source = new AlSource(*this);
+    if (source == nullptr) {
+        return {};
+    }
+
+    sources.insert(source);
+
+    qDebug() << "Subscribed to audio input device [" << sources.size() << "subscriptions ]";
+
+    return std::unique_ptr<IAudioSource>{source};
 }
 
 /**
@@ -249,19 +344,23 @@ void OpenAL::subscribeInput()
  *
  * If the input device has no more subscriptions, it will be closed.
  */
-void OpenAL::unsubscribeInput()
+void OpenAL::destroySource(AlSource& source)
 {
     QMutexLocker locker(&audioLock);
 
-    if (!inSubscriptions)
+    const auto s = sources.find(&source);
+    if (s == sources.end()) {
+        qWarning() << "Destroyed non-existant source";
         return;
+    }
 
-    inSubscriptions--;
-    qDebug() << "Unsubscribed from audio input device [" << inSubscriptions
-             << "subscriptions left ]";
+    sources.erase(s);
 
-    if (!inSubscriptions)
+    qDebug() << "Unsubscribed from audio input device [" << sources.size() << "subscriptions left ]";
+
+    if (sources.empty()) {
         cleanupInput();
+    }
 }
 
 /**
@@ -302,8 +401,8 @@ bool OpenAL::initInput(const QString& deviceName, uint32_t channels)
     this->channels = channels;
     int stereoFlag = channels == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
     const int bytesPerSample = 2;
-    const int safetyFactor = 2; // internal OpenAL ring buffer. must be larger than our inputBuffer to avoid the ring
-                                // from overwriting itself between captures.
+    const int safetyFactor = 2; // internal OpenAL ring buffer. must be larger than our inputBuffer
+                                // to avoid the ring from overwriting itself between captures.
     AUDIO_FRAME_SAMPLE_COUNT_TOTAL = AUDIO_FRAME_SAMPLE_COUNT_PER_CHANNEL * channels;
     const ALCsizei ringBufSize = AUDIO_FRAME_SAMPLE_COUNT_TOTAL * bytesPerSample * safetyFactor;
 
@@ -332,7 +431,8 @@ bool OpenAL::initInput(const QString& deviceName, uint32_t channels)
  */
 bool OpenAL::initOutput(const QString& deviceName)
 {
-    peerSources.clear();
+    // there should be no sinks when initializing the output
+    assert(sinks.size() == 0);
 
     outputInitialized = false;
     if (!Settings::getInstance().getAudioOutDevEnabled())
@@ -359,61 +459,77 @@ bool OpenAL::initOutput(const QString& deviceName)
         return false;
     }
 
-    alGenSources(1, &alMainSource);
-    checkAlError();
-
     // init master volume
     alListenerf(AL_GAIN, Settings::getInstance().getOutVolume() * 0.01f);
     checkAlError();
-
-    Core* core = Core::getInstance();
-    if (core) {
-        // reset each call's audio source
-        core->getAv()->invalidateCallSources();
-    }
 
     outputInitialized = true;
     return true;
 }
 
 /**
- * @brief Play a 48kHz mono 16bit PCM sound from a file
- *
- * @param[in] path the path to the sound file
- */
-void OpenAL::playMono16Sound(const QString& path)
-{
-    QFile sndFile(path);
-    sndFile.open(QIODevice::ReadOnly);
-    playMono16Sound(QByteArray(sndFile.readAll()));
-}
-
-/**
  * @brief Play a 48kHz mono 16bit PCM sound
  */
-void OpenAL::playMono16Sound(const QByteArray& data)
+void OpenAL::playMono16Sound(AlSink& sink, const IAudioSink::Sound& sound)
+{
+    const uint sourceId = sink.getSourceId();
+    QFile sndFile(IAudioSink::getSound(sound));
+    if (!sndFile.exists()) {
+        qDebug() << "Trying to open non existent sound file";
+        return;
+    }
+
+    sndFile.open(QIODevice::ReadOnly);
+    const QByteArray data{sndFile.readAll()};
+    if (data.isEmpty()) {
+        qDebug() << "Sound file contained no data";
+        return;
+    }
+
+    QMutexLocker locker(&audioLock);
+
+    // interrupt possibly playing sound, we don't buffer here
+    alSourceStop(sourceId);
+
+    ALint processed = 0;
+    alGetSourcei(sourceId, AL_BUFFERS_PROCESSED, &processed);
+    alSourcei(sourceId, AL_LOOPING, AL_FALSE);
+
+    ALuint bufid;
+    if (processed == 0) {
+        // create new buffer
+        alGenBuffers(1, &bufid);
+    } else {
+        // we only reserve space for one buffer
+        assert(processed == 1);
+        // unqueue all processed buffers
+        alSourceUnqueueBuffers(sourceId, processed, &bufid);
+    }
+
+    alBufferData(bufid, AL_FORMAT_MONO16, data.constData(), data.size(), AUDIO_SAMPLE_RATE);
+    alSourcei(sourceId, AL_BUFFER, bufid);
+    alSourcePlay(sourceId);
+    soundSinks.insert(&sink);
+}
+
+void OpenAL::cleanupSound()
 {
     QMutexLocker locker(&audioLock);
 
-    if (!autoInitOutput())
-        return;
+    auto sinkIt = soundSinks.begin();
+    while (sinkIt != soundSinks.end()) {
+        auto sink = *sinkIt;
+        ALuint sourceId = sink->getSourceId();
+        ALint state = 0;
 
-    if (!alMainBuffer)
-        alGenBuffers(1, &alMainBuffer);
-
-    ALint state;
-    alGetSourcei(alMainSource, AL_SOURCE_STATE, &state);
-    if (state == AL_PLAYING) {
-        alSourceStop(alMainSource);
-        alSourcei(alMainSource, AL_BUFFER, AL_NONE);
+        alGetSourcei(sourceId, AL_SOURCE_STATE, &state);
+        if (state != AL_PLAYING) {
+            sinkIt = soundSinks.erase(sinkIt);
+            emit sink->finishedPlaying();
+        } else {
+            ++sinkIt;
+        }
     }
-
-    alBufferData(alMainBuffer, AL_FORMAT_MONO16, data.constData(), data.size(), AUDIO_SAMPLE_RATE);
-    alSourcei(alMainSource, AL_BUFFER, static_cast<ALint>(alMainBuffer));
-    alSourcePlay(alMainSource);
-
-    int durationMs = data.size() * 1000 / 2 / AUDIO_SAMPLE_RATE;
-    QMetaObject::invokeMethod(&playMono16Timer, "start", Q_ARG(int, durationMs + 50));
 }
 
 void OpenAL::playAudioBuffer(uint sourceId, const int16_t* data, int samples, unsigned channels,
@@ -483,15 +599,6 @@ void OpenAL::cleanupOutput()
     outputInitialized = false;
 
     if (alOutDev) {
-        alSourcei(alMainSource, AL_LOOPING, AL_FALSE);
-        alSourceStop(alMainSource);
-        alDeleteSources(1, &alMainSource);
-
-        if (alMainBuffer) {
-            alDeleteBuffers(1, &alMainBuffer);
-            alMainBuffer = 0;
-        }
-
         if (!alcMakeContextCurrent(nullptr)) {
             qWarning("Failed to clear audio context.");
         }
@@ -505,29 +612,6 @@ void OpenAL::cleanupOutput()
         } else {
             qWarning("Failed to close output.");
         }
-    }
-}
-
-/**
- * @brief Called after a mono16 sound stopped playing
- */
-void OpenAL::playMono16SoundCleanup()
-{
-    QMutexLocker locker(&audioLock);
-
-    ALint state;
-    alGetSourcei(alMainSource, AL_SOURCE_STATE, &state);
-    if (state == AL_STOPPED) {
-        alSourcei(alMainSource, AL_BUFFER, AL_NONE);
-        alDeleteBuffers(1, &alMainBuffer);
-        alMainBuffer = 0;
-        // close the audio device if no other sources active
-        if (peerSources.isEmpty()) {
-            cleanupOutput();
-        }
-    } else {
-        // the audio didn't finish, try again later
-        playMono16Timer.start(10);
     }
 }
 
@@ -546,9 +630,9 @@ float OpenAL::getVolume()
     float sumOfSquares = 0;
     for (quint32 i = 0; i < samples; i++) {
         float sample = static_cast<float>(inputBuffer[i]) / std::numeric_limits<int16_t>::max();
-        sumOfSquares += std::pow(sample , 2);
+        sumOfSquares += std::pow(sample, 2);
     }
-    const float rms = std::sqrt(sumOfSquares/samples);
+    const float rms = std::sqrt(sumOfSquares / samples);
     // our calculated normalized volume could possibly be above 1 because our RMS assumes a sinusoidal wave
     const float normalizedVolume = std::min(rms * rootTwo, 1.0f);
     return normalizedVolume;
@@ -585,12 +669,19 @@ void OpenAL::doInput()
         volume = 0;
     }
 
-    emit Audio::volumeAvailable(volume);
+    // NOTE(sudden6): this loop probably doesn't scale too well with many sources
+    for (auto source : sources) {
+        emit source->volumeAvailable(volume);
+    }
     if (!isActive) {
         return;
     }
 
-    emit Audio::frameAvailable(inputBuffer, AUDIO_FRAME_SAMPLE_COUNT_PER_CHANNEL, channels, AUDIO_SAMPLE_RATE);
+    // NOTE(sudden6): this loop probably doesn't scale too well with many sources
+    for (auto source : sources) {
+        emit source->frameAvailable(inputBuffer, AUDIO_FRAME_SAMPLE_COUNT_PER_CHANNEL, channels,
+                                    AUDIO_SAMPLE_RATE);
+    }
 }
 
 void OpenAL::doOutput()
@@ -605,13 +696,10 @@ void OpenAL::doAudio()
 {
     QMutexLocker lock(&audioLock);
 
-    // Output section
-    if (outputInitialized && !peerSources.isEmpty()) {
-        doOutput();
-    }
+    // Output section does nothing
 
     // Input section
-    if (alInDev && inSubscriptions) {
+    if (alInDev && !sources.empty()) {
         doInput();
     }
 }
@@ -664,72 +752,37 @@ QStringList OpenAL::inDeviceNames()
     return list;
 }
 
-void OpenAL::subscribeOutput(uint& sid)
+/**
+ * @brief Free all buffers that finished playing on a source
+ * @param sourceId where to remove the buffers from
+ */
+void OpenAL::cleanupBuffers(uint sourceId)
 {
-    QMutexLocker locker(&audioLock);
-
-    if (!autoInitOutput()) {
-        qWarning("Failed to subscribe to audio output device.");
-        return;
-    }
-
-    alGenSources(1, &sid);
-    assert(sid);
-    peerSources << sid;
-
-    qDebug() << "Audio source" << sid << "created. Sources active:" << peerSources.size();
+    // unqueue all buffers from the source
+    ALint processed = 0;
+    alGetSourcei(sourceId, AL_BUFFERS_PROCESSED, &processed);
+    std::vector<ALuint> bufids;
+    // should never be out of range, just to be sure
+    assert(processed >= 0);
+    assert(processed <= SIZE_MAX);
+    bufids.resize(processed);
+    alSourceUnqueueBuffers(sourceId, processed, bufids.data());
+    // delete all buffers
+    alDeleteBuffers(processed, bufids.data());
 }
 
-void OpenAL::unsubscribeOutput(uint& sid)
+void OpenAL::startLoop(uint sourceId)
 {
     QMutexLocker locker(&audioLock);
-
-    peerSources.removeAll(sid);
-
-    if (sid) {
-        if (alIsSource(sid)) {
-            // stop playing, marks all buffers as processed
-            alSourceStop(sid);
-            // unqueue all buffers from the source
-            ALint processed = 0;
-            alGetSourcei(sid, AL_BUFFERS_PROCESSED, &processed);
-            ALuint* bufids = new ALuint[processed];
-            alSourceUnqueueBuffers(sid, processed, bufids);
-            // delete all buffers
-            alDeleteBuffers(processed, bufids);
-            delete[] bufids;
-            alDeleteSources(1, &sid);
-            qDebug() << "Audio source" << sid << "deleted. Sources active:" << peerSources.size();
-        } else {
-            qWarning() << "Trying to delete invalid audio source" << sid;
-        }
-
-        sid = 0;
-    }
-
-    if (peerSources.isEmpty())
-        cleanupOutput();
+    alSourcei(sourceId, AL_LOOPING, AL_TRUE);
 }
 
-void OpenAL::startLoop()
+void OpenAL::stopLoop(uint sourceId)
 {
     QMutexLocker locker(&audioLock);
-    alSourcei(alMainSource, AL_LOOPING, AL_TRUE);
-}
-
-void OpenAL::stopLoop()
-{
-    QMutexLocker locker(&audioLock);
-    alSourcei(alMainSource, AL_LOOPING, AL_FALSE);
-    alSourceStop(alMainSource);
-
-    ALint state;
-    alGetSourcei(alMainSource, AL_SOURCE_STATE, &state);
-    if (state == AL_STOPPED) {
-        alSourcei(alMainSource, AL_BUFFER, AL_NONE);
-        alDeleteBuffers(1, &alMainBuffer);
-        alMainBuffer = 0;
-    }
+    alSourcei(sourceId, AL_LOOPING, AL_FALSE);
+    alSourceStop(sourceId);
+    cleanupBuffers(sourceId);
 }
 
 qreal OpenAL::inputGain() const

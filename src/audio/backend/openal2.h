@@ -21,8 +21,8 @@
 #ifndef OPENAL2_H
 #define OPENAL2_H
 
-#include "openal.h"
 #include "src/audio/audio.h"
+#include "src/audio/backend/openal.h"
 
 #include <atomic>
 #include <cmath>
@@ -37,7 +37,8 @@
 #include <AL/alc.h>
 #include <AL/alext.h>
 
-extern "C" {
+extern "C"
+{
 #include <filter_audio.h>
 }
 

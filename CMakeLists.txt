@@ -170,6 +170,7 @@ qt5_add_translation(${PROJECT_NAME}_QM_FILES
   translations/pl.ts
   translations/pr.ts
   translations/pt.ts
+  translations/pt_BR.ts
   translations/ro.ts
   translations/ru.ts
   translations/sk.ts
@@ -235,9 +236,15 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different
 set(${PROJECT_NAME}_SOURCES
   src/audio/audio.cpp
   src/audio/audio.h
+  src/audio/backend/alsink.cpp
+  src/audio/backend/alsink.h
+  src/audio/backend/alsource.cpp
+  src/audio/backend/alsource.h
   src/audio/backend/openal.cpp
   src/audio/backend/openal.h
   src/audio/iaudiosettings.h
+  src/audio/iaudiosink.h
+  src/audio/iaudiosource.h
   src/chatlog/chatlinecontent.cpp
   src/chatlog/chatlinecontent.h
   src/chatlog/chatlinecontentproxy.cpp
@@ -288,12 +295,16 @@ set(${PROJECT_NAME}_SOURCES
   src/core/toxfilepause.h
   src/core/toxid.cpp
   src/core/toxid.h
+  src/core/groupid.cpp
+  src/core/groupid.h
   src/core/toxlogger.cpp
   src/core/toxlogger.h
   src/core/toxoptions.cpp
   src/core/toxoptions.h
   src/core/toxpk.cpp
   src/core/toxpk.h
+  src/core/contactid.cpp
+  src/core/contactid.h
   src/core/toxstring.cpp
   src/core/toxstring.h
   src/friendlist.cpp
@@ -318,6 +329,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/groupinvite.h
   src/model/group.cpp
   src/model/group.h
+  src/model/status.cpp
+  src/model/status.h
   src/model/interface.h
   src/model/profile/iprofileinfo.h
   src/model/profile/profileinfo.cpp
@@ -683,6 +696,7 @@ add_library(${PROJECT_NAME}_static
   ${${PROJECT_NAME}_QM_FILES}
   ${${PROJECT_NAME}_RESOURCES})
 target_link_libraries(${PROJECT_NAME}_static
+  ${CMAKE_REQUIRED_LIBRARIES}
   ${ALL_LIBRARIES})
 
 add_executable(${PROJECT_NAME}
@@ -692,6 +706,7 @@ add_executable(${PROJECT_NAME}
   src/main.cpp)
 target_link_libraries(${PROJECT_NAME}
   ${PROJECT_NAME}_static
+  ${CMAKE_REQUIRED_LIBRARIES}
   ${ALL_LIBRARIES})
 
 include(Testing)

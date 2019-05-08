@@ -273,17 +273,7 @@ void Settings::loadGlobal()
     loaded = true;
 }
 
-void Settings::loadPersonal()
-{
-    Profile* profile = Nexus::getProfile();
-    if (!profile) {
-        qCritical() << "No active profile, couldn't load personal settings";
-        return;
-    }
-    loadPersonal(profile);
-}
-
-void Settings::loadPersonal(Profile* profile)
+void Settings::loadPersonal(QString profileName, const ToxEncrypt* passKey)
 {
     QMutexLocker locker{&bigLock};
 
@@ -291,13 +281,13 @@ void Settings::loadPersonal(Profile* profile)
     QString filePath = dir.filePath(globalSettingsFile);
 
     // load from a profile specific friend data list if possible
-    QString tmp = dir.filePath(profile->getName() + ".ini");
+    QString tmp = dir.filePath(profileName + ".ini");
     if (QFile(tmp).exists()) // otherwise, filePath remains the global file
         filePath = tmp;
 
     qDebug() << "Loading personal settings from" << filePath;
 
-    SettingsSerializer ps(filePath, profile->getPasskey());
+    SettingsSerializer ps(filePath, passKey);
     ps.load();
     friendLst.clear();
 
@@ -330,7 +320,7 @@ void Settings::loadPersonal(Profile* profile)
 
             if (getEnableLogging())
                 fp.activity = ps.value("activity", QDate()).toDate();
-            friendLst.insert(ToxId(fp.addr).getPublicKey().getKey(), fp);
+            friendLst.insert(ToxId(fp.addr).getPublicKey().getByteArray(), fp);
         }
         ps.endArray();
     }
@@ -1322,7 +1312,7 @@ QString Settings::getAutoAcceptDir(const ToxPk& id) const
 {
     QMutexLocker locker{&bigLock};
 
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end())
         return it->autoAcceptDir;
 
@@ -1345,7 +1335,7 @@ Settings::AutoAcceptCallFlags Settings::getAutoAcceptCall(const ToxPk& id) const
 {
     QMutexLocker locker{&bigLock};
 
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end())
         return it->autoAcceptCall;
 
@@ -1368,7 +1358,7 @@ bool Settings::getAutoGroupInvite(const ToxPk& id) const
 {
     QMutexLocker locker{&bigLock};
 
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end()) {
         return it->autoGroupInvite;
     }
@@ -1392,7 +1382,7 @@ QString Settings::getContactNote(const ToxPk& id) const
 {
     QMutexLocker locker{&bigLock};
 
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end())
         return it->note;
 
@@ -1990,7 +1980,7 @@ QString Settings::getFriendAddress(const QString& publicKey) const
 {
     QMutexLocker locker{&bigLock};
     // TODO: using ToxId here is a hack
-    QByteArray key = ToxId(publicKey).getPublicKey().getKey();
+    QByteArray key = ToxId(publicKey).getPublicKey().getByteArray();
     auto it = friendLst.find(key);
     if (it != friendLst.end())
         return it->addr;
@@ -2010,7 +2000,7 @@ void Settings::updateFriendAddress(const QString& newAddr)
 QString Settings::getFriendAlias(const ToxPk& id) const
 {
     QMutexLocker locker{&bigLock};
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end())
         return it->alias;
 
@@ -2027,7 +2017,7 @@ void Settings::setFriendAlias(const ToxPk& id, const QString& alias)
 int Settings::getFriendCircleID(const ToxPk& id) const
 {
     QMutexLocker locker{&bigLock};
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end())
         return it->circleID;
 
@@ -2043,7 +2033,8 @@ void Settings::setFriendCircleID(const ToxPk& id, int circleID)
 
 QDate Settings::getFriendActivity(const ToxPk& id) const
 {
-    auto it = friendLst.find(id.getKey());
+    QMutexLocker locker{&bigLock};
+    auto it = friendLst.find(id.getByteArray());
     if (it != friendLst.end())
         return it->activity;
 
@@ -2066,7 +2057,7 @@ void Settings::saveFriendSettings(const ToxPk& id)
 void Settings::removeFriendSettings(const ToxPk& id)
 {
     QMutexLocker locker{&bigLock};
-    friendLst.remove(id.getKey());
+    friendLst.remove(id.getByteArray());
 }
 
 bool Settings::getFauxOfflineMessaging() const
@@ -2385,9 +2376,9 @@ Settings::friendProp& Settings::getOrInsertFriendPropRef(const ToxPk& id)
 {
     // No mutex lock, this is a private fn that should only be called by other
     // public functions that already locked the mutex
-    auto it = friendLst.find(id.getKey());
+    auto it = friendLst.find(id.getByteArray());
     if (it == friendLst.end()) {
-        it = friendLst.insert(id.getKey(), friendProp{id.toString()});
+        it = friendLst.insert(id.getByteArray(), friendProp{id.toString()});
     }
 
     return *it;

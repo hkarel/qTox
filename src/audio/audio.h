@@ -21,46 +21,16 @@
 #ifndef AUDIO_H
 #define AUDIO_H
 
-#include <atomic>
-#include <cmath>
-
-#include <QMutex>
 #include <QObject>
-#include <QTimer>
+#include <memory>
 
-#include <cassert>
-
+class IAudioSink;
+class IAudioSource;
 class Audio : public QObject
 {
     Q_OBJECT
 
 public:
-    enum class Sound
-    {
-        NewMessage,
-        Test,
-        IncomingCall,
-        OutgoingCall,
-        CallEnd
-    };
-
-    inline static QString getSound(Sound s)
-    {
-        switch (s) {
-        case Sound::Test:
-            return QStringLiteral(":/audio/notification.s16le.pcm");
-        case Sound::NewMessage:
-            return QStringLiteral(":/audio/notification.s16le.pcm");
-        case Sound::IncomingCall:
-            return QStringLiteral(":/audio/ToxIncomingCall.s16le.pcm");
-        case Sound::OutgoingCall:
-            return QStringLiteral(":/audio/ToxOutgoingCall.s16le.pcm");
-        case Sound::CallEnd:
-            return QStringLiteral(":/audio/ToxEndCall.s16le.pcm");
-        }
-        assert(false);
-        return QString();
-    }
     static Audio& getInstance();
 
     virtual qreal outputVolume() const = 0;
@@ -91,21 +61,8 @@ public:
     virtual QStringList outDeviceNames() = 0;
     virtual QStringList inDeviceNames() = 0;
 
-    virtual void subscribeOutput(uint& sourceId) = 0;
-    virtual void unsubscribeOutput(uint& sourceId) = 0;
-
-    virtual void subscribeInput() = 0;
-    virtual void unsubscribeInput() = 0;
-
-    virtual void startLoop() = 0;
-    virtual void stopLoop() = 0;
-    virtual void playMono16Sound(const QByteArray& data) = 0;
-    virtual void playMono16Sound(const QString& path) = 0;
-
-    virtual void stopActive() = 0;
-
-    virtual void playAudioBuffer(uint sourceId, const int16_t* data, int samples, unsigned channels,
-                                 int sampleRate) = 0;
+    virtual std::unique_ptr<IAudioSink> makeSink() = 0;
+    virtual std::unique_ptr<IAudioSource> makeSource() = 0;
 
 protected:
     // Public default audio settings
@@ -115,12 +72,6 @@ protected:
     static constexpr uint32_t AUDIO_FRAME_SAMPLE_COUNT_PER_CHANNEL =
         AUDIO_FRAME_DURATION * AUDIO_SAMPLE_RATE / 1000;
     uint32_t AUDIO_FRAME_SAMPLE_COUNT_TOTAL = 0;
-
-signals:
-    void frameAvailable(const int16_t* pcm, size_t sample_count, uint8_t channels,
-                        uint32_t sampling_rate);
-    void volumeAvailable(float value);
-    void startActive(qreal msec);
 };
 
 #endif // AUDIO_H

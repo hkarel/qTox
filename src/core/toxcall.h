@@ -1,6 +1,8 @@
 #ifndef TOXCALL_H
 #define TOXCALL_H
 
+#include "src/audio/iaudiosink.h"
+#include "src/audio/iaudiosource.h"
 #include <src/core/toxpk.h>
 #include <toxav/toxav.h>
 
@@ -59,6 +61,8 @@ protected:
     QMetaObject::Connection videoInConn;
     bool videoEnabled{false};
     bool nullVideoBitrate{false};
+    std::unique_ptr<IAudioSource> audioSource = nullptr;
+    QMetaObject::Connection audioSrcInvalid;
 };
 
 class ToxFriendCall : public ToxCall
@@ -76,16 +80,21 @@ public:
     TOXAV_FRIEND_CALL_STATE getState() const;
     void setState(const TOXAV_FRIEND_CALL_STATE& value);
 
-    quint32 getAlSource() const;
-    void setAlSource(const quint32& value);
+    void playAudioBuffer(const int16_t* data, int samples, unsigned channels, int sampleRate) const;
 
 protected:
     std::unique_ptr<QTimer> timeoutTimer;
 
 private:
+    QMetaObject::Connection audioSinkInvalid;
+    void onAudioSourceInvalidated();
+    void onAudioSinkInvalidated();
+
+private:
     TOXAV_FRIEND_CALL_STATE state{TOXAV_FRIEND_CALL_STATE_NONE};
     static constexpr int CALL_TIMEOUT = 45000;
-    quint32 alSource{0};
+    std::unique_ptr<IAudioSink> sink = nullptr;
+    uint32_t friendId;
 };
 
 class ToxGroupCall : public ToxCall
@@ -97,18 +106,22 @@ public:
     ~ToxGroupCall();
 
     ToxGroupCall& operator=(ToxGroupCall&& other) = delete;
-
     void removePeer(ToxPk peerId);
+
+    void playAudioBuffer(const ToxPk& peer, const int16_t* data, int samples, unsigned channels,
+                         int sampleRate);
+
+private:
     void addPeer(ToxPk peerId);
     bool havePeer(ToxPk peerId);
     void clearPeers();
 
-    quint32 getAlSource(ToxPk peer);
+    std::map<ToxPk, std::unique_ptr<IAudioSink>> peers;
+    std::map<ToxPk, QMetaObject::Connection> sinkInvalid;
+    int groupId;
 
-private:
-    QMap<ToxPk, quint32> peers;
-
-    // If you add something here, don't forget to override the ctors and move operators!
+    void onAudioSourceInvalidated();
+    void onAudioSinkInvalidated(ToxPk peerId);
 };
 
 #endif // TOXCALL_H

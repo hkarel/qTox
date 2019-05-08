@@ -31,15 +31,14 @@
 ToxCall::ToxCall(bool VideoEnabled, CoreAV& av)
     : av{&av}
     , videoEnabled{VideoEnabled}
-{
-}
+    , audioSource{Audio::getInstance().makeSource()}
+{}
 
 ToxCall::~ToxCall()
 {
-    Audio& audio = Audio::getInstance();
-
     QObject::disconnect(audioInConn);
-    audio.unsubscribeInput();
+    QObject::disconnect(audioSrcInvalid);
+
     if (videoEnabled) {
         QObject::disconnect(videoInConn);
         CameraSource::getInstance().unsubscribe();
@@ -101,33 +100,28 @@ CoreVideoSource* ToxCall::getVideoSource() const
     return videoSource;
 }
 
-quint32 ToxFriendCall::getAlSource() const
-{
-    return alSource;
-}
-
-void ToxFriendCall::setAlSource(const quint32& value)
-{
-    alSource = value;
-}
-
 ToxFriendCall::ToxFriendCall(uint32_t FriendNum, bool VideoEnabled, CoreAV& av)
     : ToxCall(VideoEnabled, av)
+    , sink(Audio::getInstance().makeSink())
+    , friendId{FriendNum}
 {
-    // register audio
-    Audio& audio = Audio::getInstance();
-    audio.subscribeInput();
-    audioInConn = QObject::connect(&Audio::getInstance(), &Audio::frameAvailable,
-    [&av, FriendNum](const int16_t* pcm, size_t samples, uint8_t chans,
-            uint32_t rate) {
-        av.sendCallAudio(FriendNum, pcm, samples, chans, rate);
-    });
+    // TODO(sudden6): move this to audio source
+    audioInConn =
+        QObject::connect(audioSource.get(), &IAudioSource::frameAvailable,
+                         [this](const int16_t* pcm, size_t samples, uint8_t chans, uint32_t rate) {
+                             this->av->sendCallAudio(this->friendId, pcm, samples, chans, rate);
+                         });
+
+    audioSrcInvalid = QObject::connect(audioSource.get(), &IAudioSource::invalidated,
+                                       [this]() { this->onAudioSourceInvalidated(); });
 
     if (!audioInConn) {
-       qDebug() << "Audio input connection not working";
+        qDebug() << "Audio input connection not working";
     }
 
-    audio.subscribeOutput(alSource);
+    audioSinkInvalid = QObject::connect(sink.get(), &IAudioSink::invalidated,
+                                        [this]() { this->onAudioSinkInvalidated(); });
+
 
     // register video
     if (videoEnabled) {
@@ -150,8 +144,30 @@ ToxFriendCall::ToxFriendCall(uint32_t FriendNum, bool VideoEnabled, CoreAV& av)
 
 ToxFriendCall::~ToxFriendCall()
 {
-    auto& audio = Audio::getInstance();
-    audio.unsubscribeOutput(alSource);
+    QObject::disconnect(audioSinkInvalid);
+}
+
+void ToxFriendCall::onAudioSourceInvalidated()
+{
+    auto newSrc = Audio::getInstance().makeSource();
+    audioInConn =
+        QObject::connect(newSrc.get(), &IAudioSource::frameAvailable,
+                         [this](const int16_t* pcm, size_t samples, uint8_t chans, uint32_t rate) {
+                             this->av->sendCallAudio(this->friendId, pcm, samples, chans, rate);
+                         });
+    audioSource = std::move(newSrc);
+
+    audioSrcInvalid = QObject::connect(audioSource.get(), &IAudioSource::invalidated,
+                                       [this]() { this->onAudioSourceInvalidated(); });
+}
+
+void ToxFriendCall::onAudioSinkInvalidated()
+{
+    auto newSink = Audio::getInstance().makeSink();
+
+    audioSinkInvalid = QObject::connect(newSink.get(), &IAudioSink::invalidated,
+                                        [this]() { this->onAudioSinkInvalidated(); });
+    sink = std::move(newSink);
 }
 
 void ToxFriendCall::startTimeout(uint32_t callId)
@@ -187,76 +203,112 @@ void ToxFriendCall::setState(const TOXAV_FRIEND_CALL_STATE& value)
     state = value;
 }
 
+void ToxFriendCall::playAudioBuffer(const int16_t* data, int samples, unsigned channels,
+                                    int sampleRate) const
+{
+    if (sink) {
+        sink->playAudioBuffer(data, samples, channels, sampleRate);
+    }
+}
+
 ToxGroupCall::ToxGroupCall(int GroupNum, CoreAV& av)
     : ToxCall(false, av)
+    , groupId{GroupNum}
 {
     // register audio
-    Audio& audio = Audio::getInstance();
-    audio.subscribeInput();
-    audioInConn = QObject::connect(&Audio::getInstance(), &Audio::frameAvailable,
-    [&av, GroupNum](const int16_t* pcm, size_t samples, uint8_t chans,
-            uint32_t rate) {
-        av.sendGroupCallAudio(GroupNum, pcm, samples, chans, rate);
-    });
+    audioInConn =
+        QObject::connect(audioSource.get(), &IAudioSource::frameAvailable,
+                         [this](const int16_t* pcm, size_t samples, uint8_t chans, uint32_t rate) {
+                             this->av->sendGroupCallAudio(this->groupId, pcm, samples, chans, rate);
+                         });
 
     if (!audioInConn) {
-       qDebug() << "Audio input connection not working";
+        qDebug() << "Audio input connection not working";
     }
+
+    audioSrcInvalid = QObject::connect(audioSource.get(), &IAudioSource::invalidated,
+                                       [this]() { this->onAudioSourceInvalidated(); });
 }
 
 ToxGroupCall::~ToxGroupCall()
 {
-    Audio& audio = Audio::getInstance();
+    // disconnect all Qt connections
+    clearPeers();
+}
 
-    for (quint32 v : peers) {
-        audio.unsubscribeOutput(v);
-    }
+void ToxGroupCall::onAudioSourceInvalidated()
+{
+    auto newSrc = Audio::getInstance().makeSource();
+    // TODO(sudden6): move this to audio source
+    audioInConn =
+        QObject::connect(audioSource.get(), &IAudioSource::frameAvailable,
+                         [this](const int16_t* pcm, size_t samples, uint8_t chans, uint32_t rate) {
+                             this->av->sendGroupCallAudio(this->groupId, pcm, samples, chans, rate);
+                         });
+
+    audioSource = std::move(newSrc);
+
+    audioSrcInvalid = QObject::connect(audioSource.get(), &IAudioSource::invalidated,
+                                       [this]() { this->onAudioSourceInvalidated(); });
+}
+
+
+void ToxGroupCall::onAudioSinkInvalidated(ToxPk peerId)
+{
+    removePeer(peerId);
+    addPeer(peerId);
 }
 
 void ToxGroupCall::removePeer(ToxPk peerId)
 {
-    auto& audio = Audio::getInstance();
-    const auto& sourceId = peers.find(peerId);
-    if(sourceId == peers.constEnd()) {
-        qDebug() << "Peer does not have a source, can't remove";
+    const auto& source = peers.find(peerId);
+    if (source == peers.cend()) {
+        qDebug() << "Peer:" << peerId.toString() << "does not have a source, can't remove";
         return;
     }
 
-    audio.unsubscribeOutput(sourceId.value());
-    peers.remove(peerId);
+    peers.erase(source);
+    QObject::disconnect(sinkInvalid[peerId]);
+    sinkInvalid.erase(peerId);
 }
 
 void ToxGroupCall::addPeer(ToxPk peerId)
 {
     auto& audio = Audio::getInstance();
-    uint sourceId = 0;
-    audio.subscribeOutput(sourceId);
-    peers.insert(peerId, sourceId);
+    std::unique_ptr<IAudioSink> newSink = audio.makeSink();
+    peers.emplace(peerId, std::move(newSink));
+
+    QMetaObject::Connection con =
+        QObject::connect(newSink.get(), &IAudioSink::invalidated,
+                         [this, peerId]() { this->onAudioSinkInvalidated(peerId); });
+
+    sinkInvalid.insert({peerId, con});
 }
 
 bool ToxGroupCall::havePeer(ToxPk peerId)
 {
-    const auto& sourceId = peers.find(peerId);
-    return sourceId != peers.constEnd();
+    const auto& source = peers.find(peerId);
+    return source != peers.cend();
 }
 
 void ToxGroupCall::clearPeers()
 {
-    Audio& audio = Audio::getInstance();
-
-    for (quint32 v : peers) {
-        audio.unsubscribeOutput(v);
+    peers.clear();
+    for (auto con : sinkInvalid) {
+        QObject::disconnect(con.second);
     }
 
-    peers.clear();
+    sinkInvalid.clear();
 }
 
-quint32 ToxGroupCall::getAlSource(ToxPk peer)
+void ToxGroupCall::playAudioBuffer(const ToxPk& peer, const int16_t* data, int samples,
+                                   unsigned channels, int sampleRate)
 {
-    if(!havePeer(peer)) {
-        qWarning() << "Getting alSource for non-existant peer";
-        return 0;
+    if (!havePeer(peer)) {
+        addPeer(peer);
     }
-
-    return peers[peer];
+    const auto& source = peers.find(peer);
+    if (source->second) {
+        source->second->playAudioBuffer(data, samples, channels, sampleRate);
+    }
 }

@@ -34,20 +34,22 @@
 #include "src/model/friend.h"
 #include "src/friendlist.h"
 #include "src/model/group.h"
+#include "src/model/status.h"
 #include "src/grouplist.h"
 #include "src/widget/contentdialogmanager.h"
 #include "src/widget/friendwidget.h"
 #include "src/widget/style.h"
 #include "src/widget/translator.h"
+#include "src/widget/widget.h"
 #include "tool/croppinglabel.h"
 
 GroupWidget::GroupWidget(std::shared_ptr<GroupChatroom> chatroom, bool compact)
     : GenericChatroomWidget(compact)
-    , groupId{static_cast<int>(chatroom->getGroup()->getId())}
+    , groupId{chatroom->getGroup()->getPersistentId()}
     , chatroom{chatroom}
 {
     avatar->setPixmap(Style::scaleSvgImage(":img/group.svg", avatar->width(), avatar->height()));
-    statusPic.setPixmap(QPixmap(":img/status/online.svg"));
+    statusPic.setPixmap(QPixmap(Status::getIconPath(Status::Status::Online)));
     statusPic.setMargin(3);
 
     Group* g = chatroom->getGroup();
@@ -67,7 +69,7 @@ GroupWidget::~GroupWidget()
     Translator::unregister(this);
 }
 
-void GroupWidget::updateTitle(uint32_t groupId, const QString& author, const QString& newName)
+void GroupWidget::updateTitle(const GroupId& groupId, const QString& author, const QString& newName)
 {
     Q_UNUSED(groupId);
     Q_UNUSED(author);
@@ -95,7 +97,7 @@ void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
         openChatWindow = menu.addAction(tr("Open chat in new window"));
     }
 
-    if (contentDialog && contentDialog->hasGroupWidget(groupId)) {
+    if (contentDialog && contentDialog->hasContactWidget(groupId)) {
         removeChatWindow = menu.addAction(tr("Remove chat from this window"));
     }
 
@@ -146,8 +148,9 @@ void GroupWidget::mouseMoveEvent(QMouseEvent* ev)
 
     if ((dragStartPos - ev->pos()).manhattanLength() > QApplication::startDragDistance()) {
         QMimeData* mdata = new QMimeData;
-        mdata->setText(getGroup()->getName());
-        mdata->setData("groupId", QByteArray::number(getGroup()->getId()));
+        const Group* group = getGroup();
+        mdata->setText(group->getName());
+        mdata->setData("groupId", group->getPersistentId().getByteArray());
 
         QDrag* drag = new QDrag(this);
         drag->setMimeData(mdata);
@@ -159,7 +162,7 @@ void GroupWidget::mouseMoveEvent(QMouseEvent* ev)
 void GroupWidget::updateUserCount()
 {
     int peersCount = chatroom->getGroup()->getPeersCount();
-    statusMessageLabel->setText(tr("%n user(s) in chat", "", peersCount));
+    statusMessageLabel->setText(tr("%n user(s) in chat", "Number of users in chat", peersCount));
 }
 
 void GroupWidget::setAsActiveChatroom()
@@ -178,13 +181,9 @@ void GroupWidget::updateStatusLight()
 {
     Group* g = chatroom->getGroup();
 
-    if (g->getEventFlag()) {
-        statusPic.setPixmap(QPixmap(":img/status/online_notification.svg"));
-        statusPic.setMargin(1);
-    } else {
-        statusPic.setPixmap(QPixmap(":img/status/online.svg"));
-        statusPic.setMargin(3);
-    }
+    const bool event = g->getEventFlag();
+    statusPic.setPixmap(QPixmap(Status::getIconPath(Status::Status::Online, event)));
+    statusPic.setMargin(event ? 1 : 3);
 }
 
 QString GroupWidget::getStatusString() const
@@ -207,6 +206,11 @@ Group* GroupWidget::getGroup() const
     return chatroom->getGroup();
 }
 
+const Contact* GroupWidget::getContact() const
+{
+    return getGroup();
+}
+
 void GroupWidget::resetEventFlags()
 {
     chatroom->resetEventFlags();
@@ -214,9 +218,10 @@ void GroupWidget::resetEventFlags()
 
 void GroupWidget::dragEnterEvent(QDragEnterEvent* ev)
 {
-    // TODO: Send ToxPk in mimeData
-    const ToxId toxId = ToxId(ev->mimeData()->text());
-    const ToxPk pk = toxId.getPublicKey();
+    if (!ev->mimeData()->hasFormat("toxPk")) {
+        return;
+    }
+    const ToxPk pk{ev->mimeData()->data("toxPk")};
     if (chatroom->friendExists(pk)) {
         ev->acceptProposedAction();
     }
@@ -235,8 +240,10 @@ void GroupWidget::dragLeaveEvent(QDragLeaveEvent*)
 
 void GroupWidget::dropEvent(QDropEvent* ev)
 {
-    const ToxId toxId = ToxId(ev->mimeData()->text());
-    const ToxPk pk = toxId.getPublicKey();
+    if (!ev->mimeData()->hasFormat("toxPk")) {
+        return;
+    }
+    const ToxPk pk{ev->mimeData()->data("toxPk")};
     if (!chatroom->friendExists(pk)) {
         return;
     }

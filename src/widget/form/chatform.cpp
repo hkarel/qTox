@@ -25,7 +25,9 @@
 #include "src/chatlog/content/text.h"
 #include "src/core/core.h"
 #include "src/core/coreav.h"
+#include "src/core/corefile.h"
 #include "src/model/friend.h"
+#include "src/model/status.h"
 #include "src/nexus.h"
 #include "src/persistence/history.h"
 #include "src/persistence/offlinemsgengine.h"
@@ -39,10 +41,12 @@
 #include "src/widget/style.h"
 #include "src/widget/tool/callconfirmwidget.h"
 #include "src/widget/tool/chattextedit.h"
+#include "src/widget/tool/croppinglabel.h"
 #include "src/widget/tool/screenshotgrabber.h"
 #include "src/widget/translator.h"
 #include "src/widget/widget.h"
 
+#include <QApplication>
 #include <QClipboard>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -50,6 +54,7 @@
 #include <QMimeData>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSplitter>
 #include <QStringBuilder>
 
 #include <cassert>
@@ -71,26 +76,6 @@ const QString ChatForm::ACTION_PREFIX = QStringLiteral("/me ");
 
 namespace
 {
-    QString statusToString(const Status status)
-    {
-        QString result;
-        switch (status) {
-        case Status::Online:
-            result = ChatForm::tr("online", "contact status");
-            break;
-        case Status::Away:
-            result = ChatForm::tr("away", "contact status");
-            break;
-        case Status::Busy:
-            result = ChatForm::tr("busy", "contact status");
-            break;
-        case Status::Offline:
-            result = ChatForm::tr("offline", "contact status");
-            break;
-        }
-        return result;
-    }
-
     QString secondsToDHMS(quint32 duration)
     {
         QString res;
@@ -160,18 +145,19 @@ ChatForm::ChatForm(Friend* chatFriend, History* history)
 
     const Core* core = Core::getInstance();
     const Profile* profile = Nexus::getProfile();
-    connect(core, &Core::fileReceiveRequested, this, &ChatForm::onFileRecvRequest);
+    const CoreFile* coreFile = core->getCoreFile();
+    connect(coreFile, &CoreFile::fileReceiveRequested, this, &ChatForm::onFileRecvRequest);
     connect(profile, &Profile::friendAvatarChanged, this, &ChatForm::onAvatarChanged);
-    connect(core, &Core::fileSendStarted, this, &ChatForm::startFileSend);
-    connect(core, &Core::fileTransferFinished, this, &ChatForm::onFileTransferFinished);
-    connect(core, &Core::fileTransferCancelled, this, &ChatForm::onFileTransferCancelled);
-    connect(core, &Core::fileTransferBrokenUnbroken, this, &ChatForm::onFileTransferBrokenUnbroken);
-    connect(core, &Core::fileSendFailed, this, &ChatForm::onFileSendFailed);
+    connect(coreFile, &CoreFile::fileSendStarted, this, &ChatForm::startFileSend);
+    connect(coreFile, &CoreFile::fileTransferFinished, this, &ChatForm::onFileTransferFinished);
+    connect(coreFile, &CoreFile::fileTransferCancelled, this, &ChatForm::onFileTransferCancelled);
+    connect(coreFile, &CoreFile::fileTransferBrokenUnbroken, this, &ChatForm::onFileTransferBrokenUnbroken);
+    connect(coreFile, &CoreFile::fileSendFailed, this, &ChatForm::onFileSendFailed);
     connect(core, &Core::receiptRecieved, this, &ChatForm::onReceiptReceived);
     connect(core, &Core::friendMessageReceived, this, &ChatForm::onFriendMessageReceived);
     connect(core, &Core::friendTypingChanged, this, &ChatForm::onFriendTypingChanged);
     connect(core, &Core::friendStatusChanged, this, &ChatForm::onFriendStatusChanged);
-    connect(core, &Core::fileNameChanged, this, &ChatForm::onFileNameChanged);
+    connect(coreFile, &CoreFile::fileNameChanged, this, &ChatForm::onFileNameChanged);
 
 
     const CoreAV* av = core->getAv();
@@ -297,7 +283,7 @@ void ChatForm::onAttachClicked()
         }
 
         qint64 filesize = file.size();
-        core->sendFile(f->getId(), fileName, path, filesize);
+        core->getCoreFile()->sendFile(f->getId(), fileName, path, filesize);
     }
 }
 
@@ -352,7 +338,7 @@ void ChatForm::onFileRecvRequest(ToxFile file)
         return;
     }
 
-    Widget::getInstance()->newFriendMessageAlert(file.friendId);
+    Widget::getInstance()->newFriendMessageAlert(f->getPublicKey());
     QString name;
     ToxPk friendId = f->getPublicKey();
     if (friendId != previousId) {
@@ -521,7 +507,7 @@ void ChatForm::updateCallButtons()
     CoreAV* av = Core::getInstance()->getAv();
     const bool audio = av->isCallActive(f);
     const bool video = av->isCallVideoEnabled(f);
-    const bool online = f->getStatus() != Status::Offline;
+    const bool online = f->isOnline();
     headWidget->updateCallButtons(online, audio, video);
     updateMuteMicButton();
     updateMuteVolButton();
@@ -630,14 +616,14 @@ void ChatForm::onFileSendFailed(uint32_t friendId, const QString& fname)
                          QDateTime::currentDateTime());
 }
 
-void ChatForm::onFriendStatusChanged(uint32_t friendId, Status status)
+void ChatForm::onFriendStatusChanged(uint32_t friendId, Status::Status status)
 {
     // Disable call buttons if friend is offline
     if (friendId != f->getId()) {
         return;
     }
 
-    if (status == Status::Offline) {
+    if (!f->isOnline()) {
         // Hide the "is typing" message when a friend goes offline
         setFriendTyping(false);
     } else {
@@ -647,7 +633,7 @@ void ChatForm::onFriendStatusChanged(uint32_t friendId, Status status)
     updateCallButtons();
 
     if (Settings::getInstance().getStatusChangeNotificationEnabled()) {
-        QString fStatus = statusToString(status);
+        QString fStatus = Status::getTitle(status);
         addSystemInfoMessage(tr("%1 is now %2", "e.g. \"Dubslow is now online\"")
                                  .arg(f->getDisplayedName())
                                  .arg(fStatus),
@@ -689,7 +675,7 @@ void ChatForm::onStatusMessage(const QString& message)
 void ChatForm::onReceiptReceived(quint32 friendId, ReceiptNum receipt)
 {
     if (friendId == f->getId()) {
-        offlineEngine->dischargeReceipt(receipt);
+        offlineEngine->onReceiptReceived(receipt);
     }
 }
 
@@ -706,7 +692,7 @@ GenericNetCamView* ChatForm::createNetcam()
 {
     qDebug() << "creating netcam";
     uint32_t friendId = f->getId();
-    NetCamView* view = new NetCamView(friendId, this);
+    NetCamView* view = new NetCamView(f->getPublicKey(), this);
     CoreAV* av = Core::getInstance()->getAv();
     VideoSource* source = av->getVideoSourceFromCall(friendId);
     view->show(source, f->getDisplayedName());
@@ -762,7 +748,7 @@ void ChatForm::dropEvent(QDropEvent* ev)
         }
 
         if (info.exists()) {
-            core->sendFile(f->getId(), fileName, info.absoluteFilePath(), info.size());
+            core->getCoreFile()->sendFile(f->getId(), fileName, info.absoluteFilePath(), info.size());
         }
     }
 }
@@ -770,7 +756,7 @@ void ChatForm::dropEvent(QDropEvent* ev)
 void ChatForm::clearChatArea()
 {
     GenericChatForm::clearChatArea(/* confirm = */ false, /* inform = */ true);
-    offlineEngine->removeAllReceipts();
+    offlineEngine->removeAllMessages();
 }
 
 QString getMsgAuthorDispName(const ToxPk& authorPk, const QString& dispName)
@@ -931,15 +917,23 @@ void ChatForm::sendLoadedMessage(ChatMessage::Ptr chatMsg, MessageMetadata const
         return;
     }
 
-    ReceiptNum receipt{0};
-    if (f->getStatus() != Status::Offline) {
+    ReceiptNum receipt;
+    bool  messageSent{false};
+    if (f->isOnline()) {
         Core* core = Core::getInstance();
         uint32_t friendId = f->getId();
         QString stringMsg = chatMsg->toString();
-        metadata.isAction ? core->sendAction(friendId, stringMsg, receipt)
-                          : core->sendMessage(friendId, stringMsg, receipt);
+        messageSent = metadata.isAction ? core->sendAction(friendId, stringMsg, receipt)
+                                        : core->sendMessage(friendId, stringMsg, receipt);
+        if (!messageSent) {
+            qWarning() << "Failed to send loaded message, adding to offline messaging";
+        }
     }
-    getOfflineMsgEngine()->registerReceipt(receipt, metadata.id, chatMsg);
+    if (messageSent) {
+        getOfflineMsgEngine()->addSentSavedMessage(receipt, metadata.id, chatMsg);
+    } else {
+        getOfflineMsgEngine()->addSavedMessage(metadata.id, chatMsg);
+    }
 }
 
 void ChatForm::onScreenshotClicked()
@@ -976,7 +970,8 @@ void ChatForm::sendImage(const QPixmap& pixmap)
         qint64 filesize = file.size();
         file.close();
         QFileInfo fi(file);
-        Core::getInstance()->sendFile(f->getId(), fi.fileName(), fi.filePath(), filesize);
+        CoreFile* coreFile = Core::getInstance()->getCoreFile();
+        coreFile->sendFile(f->getId(), fi.fileName(), fi.filePath(), filesize);
     } else {
         QMessageBox::warning(this,
                              tr("Failed to open temporary file", "Temporary file for screenshot"),
@@ -1128,11 +1123,15 @@ void ChatForm::SendMessageStr(QString msg)
             historyPart = ACTION_PREFIX + part;
         }
 
-        ReceiptNum receipt{0};
-        if (f->getStatus() != Status::Offline) {
+        ReceiptNum receipt;
+        bool messageSent{false};
+        if (f->isOnline()) {
             Core* core = Core::getInstance();
             uint32_t friendId = f->getId();
-            isAction ? core->sendAction(friendId, part, receipt) : core->sendMessage(friendId, part, receipt);
+            messageSent = isAction ? core->sendAction(friendId, part, receipt) : core->sendMessage(friendId, part, receipt);
+            if (!messageSent) {
+                qCritical() << "Failed to send message, adding to offline messaging";
+            }
         }
 
         ChatMessage::Ptr ma = createSelfMessage(part, timestamp, isAction, false);
@@ -1144,8 +1143,12 @@ void ChatForm::SendMessageStr(QString msg)
             QString name = Core::getInstance()->getUsername();
             bool isSent = !Settings::getInstance().getFauxOfflineMessaging();
             history->addNewMessage(pk, historyPart, selfPk, timestamp, isSent, name,
-                                   [offMsgEngine, receipt, ma](RowId id) {
-                                       offMsgEngine->registerReceipt(receipt, id, ma);
+                                   [messageSent, offMsgEngine, receipt, ma](RowId id) {
+                                        if (messageSent) {
+                                            offMsgEngine->addSentSavedMessage(receipt, id, ma);
+                                        } else {
+                                            offMsgEngine->addSavedMessage(id, ma);
+                                        }
                                    });
         } else {
             // TODO: Make faux-offline messaging work partially with the history disabled

@@ -26,6 +26,7 @@
 #include "src/friendlist.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
+#include "src/model/status.h"
 #include "src/persistence/settings.h"
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
@@ -282,14 +283,14 @@ void FriendListWidget::addGroupWidget(GroupWidget* widget)
     groupLayout.addSortedWidget(widget);
     Group* g = widget->getGroup();
     connect(g, &Group::titleChanged,
-            [=](uint32_t groupId, const QString& author, const QString& name) {
+            [=](const GroupId& groupId, const QString& author, const QString& name) {
         Q_UNUSED(groupId);
         Q_UNUSED(author);
         renameGroupWidget(widget, name);
     });
 }
 
-void FriendListWidget::addFriendWidget(FriendWidget* w, Status s, int circleIndex)
+void FriendListWidget::addFriendWidget(FriendWidget* w, Status::Status s, int circleIndex)
 {
     CircleWidget* circleWidget = CircleWidget::getFromID(circleIndex);
     if (circleWidget == nullptr)
@@ -565,8 +566,11 @@ void FriendListWidget::cycleContacts(GenericChatroomWidget* activeChatroomWidget
 
 void FriendListWidget::dragEnterEvent(QDragEnterEvent* event)
 {
-    ToxId toxId(event->mimeData()->text());
-    Friend* frnd = FriendList::findFriend(toxId.getPublicKey());
+    if (!event->mimeData()->hasFormat("toxPk")) {
+        return;
+    }
+    ToxPk toxPk(event->mimeData()->data("toxPk"));;
+    Friend* frnd = FriendList::findFriend(toxPk);
     if (frnd)
         event->acceptProposedAction();
 }
@@ -580,8 +584,8 @@ void FriendListWidget::dropEvent(QDropEvent* event)
         return;
 
     // Check, that the user has a friend with the same ToxPk
-    const QByteArray data = QByteArray::fromHex(event->mimeData()->text().toLatin1());
-    const ToxPk toxPk{data};
+    assert(event->mimeData()->hasFormat("toxPk"));
+    const ToxPk toxPk{event->mimeData()->data("toxPk")};
     Friend* f = FriendList::findFriend(toxPk);
     if (!f)
         return;
@@ -606,7 +610,7 @@ void FriendListWidget::dayTimeout()
     dayTimer->start(timeUntilTomorrow());
 }
 
-void FriendListWidget::moveWidget(FriendWidget* widget, Status s, bool add)
+void FriendListWidget::moveWidget(FriendWidget* widget, Status::Status s, bool add)
 {
     if (mode == Name) {
         const Friend* f = widget->getFriend();

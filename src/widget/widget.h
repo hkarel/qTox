@@ -30,8 +30,11 @@
 
 #include "genericchatitemwidget.h"
 
+#include "src/audio/iaudiosink.h"
 #include "src/core/core.h"
 #include "src/core/toxfile.h"
+#include "src/core/groupid.h"
+#include "src/core/toxpk.h"
 #include "src/core/toxid.h"
 #if DESKTOP_NOTIFICATIONS
 #include "src/platform/desktop_notifications/desktopnotify.h"
@@ -44,6 +47,7 @@ class MainWindow;
 }
 
 class AddFriendForm;
+class AlSink;
 class Camera;
 class ChatForm;
 class CircleWidget;
@@ -119,11 +123,10 @@ public:
     void showUpdateDownloadProgress();
     void addFriendDialog(const Friend* frnd, ContentDialog* dialog);
     void addGroupDialog(Group* group, ContentDialog* dialog);
-    bool newFriendMessageAlert(int friendId, bool sound = true);
-    bool newGroupMessageAlert(int groupId, bool notify);
+    bool newFriendMessageAlert(const ToxPk& friendId, bool sound = true);
+    bool newGroupMessageAlert(const GroupId& groupId, bool notify);
     bool getIsWindowMinimized();
     void updateIcons();
-    void clearContactsList();
 
     static QString fromDialogType(DialogType type);
     ContentDialog* createContentDialog() const;
@@ -135,14 +138,9 @@ public:
     void reloadHistory();
 
     void reloadTheme();
-    static QString getStatusIconPath(Status status);
     static inline QIcon prepareIcon(QString path, int w = 0, int h = 0);
-    static QPixmap getStatusIconPixmap(QString path, uint32_t w, uint32_t h);
-    static QString getStatusTitle(Status status);
-    static Status getStatusFromString(QString status);
 
     void searchCircle(CircleWidget* circleWidget);
-    void searchItem(GenericChatItemWidget* chatItem, GenericChatItemWidget::ItemType type);
     bool groupsVisible() const;
 
     void resetIcon();
@@ -155,7 +153,7 @@ public slots:
     void forceShow();
     void onConnected();
     void onDisconnected();
-    void onStatusSet(Status status);
+    void onStatusSet(Status::Status status);
     void onFailedToStartCore();
     void onBadProxyCore();
     void onSelfAvatarLoaded(const QPixmap& pic);
@@ -163,25 +161,26 @@ public slots:
     void setStatusMessage(const QString& statusMessage);
     void addFriend(uint32_t friendId, const ToxPk& friendPk);
     void addFriendFailed(const ToxPk& userId, const QString& errorInfo = QString());
-    void onFriendStatusChanged(int friendId, Status status);
+    void onFriendStatusChanged(int friendId, Status::Status status);
     void onFriendStatusMessageChanged(int friendId, const QString& message);
     void onFriendDisplayedNameChanged(const QString& displayed);
     void onFriendUsernameChanged(int friendId, const QString& username);
-    void onFriendAliasChanged(uint32_t friendId, const QString& alias);
-    void onFriendMessageReceived(int friendId, const QString& message, bool isAction);
+    void onFriendAliasChanged(const ToxPk& friendId, const QString& alias);
+    void onFriendMessageReceived(uint32_t friendnumber, const QString& message, bool isAction);
     void onFriendRequestReceived(const ToxPk& friendPk, const QString& message);
     void updateFriendActivity(const Friend* frnd);
-    void onReceiptRecieved(int friendId, ReceiptNum receipt);
-    void onEmptyGroupCreated(int groupId, const QString& title);
+    void onEmptyGroupCreated(uint32_t groupnumber, const GroupId& groupId, const QString& title);
+    void onGroupJoined(int groupNum, const GroupId& groupId);
     void onGroupInviteReceived(const GroupInvite& inviteInfo);
     void onGroupInviteAccepted(const GroupInvite& inviteInfo);
     void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
-    void onGroupPeerlistChanged(int groupnumber);
-    void onGroupPeerNameChanged(int groupnumber, int peernumber, const QString& newName);
-    void onGroupTitleChanged(int groupnumber, const QString& author, const QString& title);
+    void onGroupPeerlistChanged(uint32_t groupnumber);
+    void onGroupPeerNameChanged(uint32_t groupnumber, int peernumber, const QString& newName);
+    void onGroupTitleChanged(uint32_t groupnumber, const QString& author, const QString& title);
+    void titleChangedByUser(const GroupId& groupId, const QString& title);
     void onGroupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
-    void onGroupSendFailed(int groupId);
-    void onFriendTypingChanged(int friendId, bool isTyping);
+    void onGroupSendFailed(uint32_t groupnumber);
+    void onFriendTypingChanged(uint32_t friendnumber, bool isTyping);
     void nextContact();
     void previousContact();
     void onFriendDialogShown(const Friend* f);
@@ -193,9 +192,10 @@ public slots:
 signals:
     void friendRequestAccepted(const ToxPk& friendPk);
     void friendRequested(const ToxId& friendAddress, const QString& message);
-    void statusSet(Status status);
-    void statusSelected(Status status);
+    void statusSet(Status::Status status);
+    void statusSelected(Status::Status status);
     void usernameChanged(const QString& username);
+    void changeGroupTitle(uint32_t groupnumber, const QString& title);
     void statusMessageChanged(const QString& statusMessage);
     void resized();
     void windowStateChanged(Qt::WindowStates states);
@@ -208,9 +208,9 @@ private slots:
     void openNewDialog(GenericChatroomWidget* widget);
     void onChatroomWidgetClicked(GenericChatroomWidget* widget);
     void onStatusMessageChanged(const QString& newStatusMessage);
-    void removeFriend(int friendId);
-    void copyFriendIdToClipboard(int friendId);
-    void removeGroup(int groupId);
+    void removeFriend(const ToxPk& friendId);
+    void copyFriendIdToClipboard(const ToxPk& friendId);
+    void removeGroup(const GroupId& groupId);
     void setStatusOnline();
     void setStatusAway();
     void setStatusBusy();
@@ -243,7 +243,7 @@ private:
     bool newMessageAlert(QWidget* currentWindow, bool isActive, bool sound = true, bool notify = true);
     void setActiveToolMenuButton(ActiveToolMenuButton newActiveButton);
     void hideMainForms(GenericChatroomWidget* chatroomWidget);
-    Group* createGroup(int groupId);
+    Group* createGroup(uint32_t groupnumber, const GroupId& groupId);
     void removeFriend(Friend* f, bool fake = false);
     void removeGroup(Group* g, bool fake = false);
     void saveWindowGeometry();
@@ -259,6 +259,8 @@ private:
     void retranslateUi();
     void focusChatInput();
     void openDialog(GenericChatroomWidget* widget, bool newWindow);
+    void playNotificationSound(IAudioSink::Sound sound, bool loop = false);
+    void cleanupNotificationSound();
 
 private:
     SystemTrayIcon* icon = nullptr;
@@ -311,15 +313,17 @@ private:
     QPushButton* groupInvitesButton;
     unsigned int unreadGroupInvites;
     int icon_size;
+    std::unique_ptr<IAudioSink> audioNotification = nullptr;
     Settings& settings;
 
-    QMap<uint32_t, FriendWidget*> friendWidgets;
-    QMap<uint32_t, std::shared_ptr<FriendChatroom>> friendChatrooms;
-    QMap<uint32_t, ChatForm*> chatForms;
+    QMap<ToxPk, FriendWidget*> friendWidgets;
+    QMap<ToxPk, std::shared_ptr<FriendChatroom>> friendChatrooms;
+    QMap<ToxPk, ChatForm*> chatForms;
 
-    QMap<uint32_t, GroupWidget*> groupWidgets;
-    QMap<uint32_t, std::shared_ptr<GroupChatroom>> groupChatrooms;
-    QMap<uint32_t, QSharedPointer<GroupChatForm>> groupChatForms;
+    QMap<GroupId, GroupWidget*> groupWidgets;
+    QMap<GroupId, std::shared_ptr<GroupChatroom>> groupChatrooms;
+    QMap<GroupId, QSharedPointer<GroupChatForm>> groupChatForms;
+    Core* core = nullptr;
 
 #if DESKTOP_NOTIFICATIONS
     DesktopNotify notifier;

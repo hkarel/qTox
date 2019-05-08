@@ -23,6 +23,7 @@
 #include "src/core/core.h"
 #include "src/core/coreav.h"
 #include "src/model/groupinvite.h"
+#include "src/model/status.h"
 #include "src/persistence/profile.h"
 #include "src/widget/widget.h"
 #include "video/camerasource.h"
@@ -83,7 +84,7 @@ void Nexus::start()
     qDebug() << "Starting up";
 
     // Setup the environment
-    qRegisterMetaType<Status>("Status");
+    qRegisterMetaType<Status::Status>("Status::Status");
     qRegisterMetaType<vpx_image>("vpx_image");
     qRegisterMetaType<uint8_t>("uint8_t");
     qRegisterMetaType<uint16_t>("uint16_t");
@@ -99,7 +100,11 @@ void Nexus::start()
     qRegisterMetaType<std::shared_ptr<VideoFrame>>("std::shared_ptr<VideoFrame>");
     qRegisterMetaType<ToxPk>("ToxPk");
     qRegisterMetaType<ToxId>("ToxId");
+    qRegisterMetaType<ToxPk>("GroupId");
+    qRegisterMetaType<ToxPk>("ContactId");
     qRegisterMetaType<GroupInvite>("GroupInvite");
+    qRegisterMetaType<ReceiptNum>("ReceiptNum");
+    qRegisterMetaType<RowId>("RowId");
 
     qApp->setQuitOnLastWindowClosed(false);
 
@@ -210,6 +215,7 @@ void Nexus::showMainGUI()
     connect(core, &Core::groupTitleChanged, widget, &Widget::onGroupTitleChanged);
     connect(core, &Core::groupPeerAudioPlaying, widget, &Widget::onGroupPeerAudioPlaying);
     connect(core, &Core::emptyGroupCreated, widget, &Widget::onEmptyGroupCreated);
+    connect(core, &Core::groupJoined, widget, &Widget::onGroupJoined);
     connect(core, &Core::friendTypingChanged, widget, &Widget::onFriendTypingChanged);
     connect(core, &Core::groupSentFailed, widget, &Widget::onGroupSendFailed);
     connect(core, &Core::usernameSet, widget, &Widget::refreshPeerListsLocal);
@@ -270,7 +276,7 @@ void Nexus::setProfile(Profile* profile)
 {
     getInstance().profile = profile;
     if (profile)
-        Settings::getInstance().loadPersonal(profile);
+        Settings::getInstance().loadPersonal(profile->getName(), profile->getPasskey());
 }
 
 /**

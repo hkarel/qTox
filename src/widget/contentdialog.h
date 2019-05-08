@@ -22,7 +22,9 @@
 
 #include "src/widget/genericchatitemlayout.h"
 #include "src/widget/tool/activatedialog.h"
-#include "src/core/core.h" // Status
+#include "src/model/status.h"
+#include "src/core/groupid.h"
+#include "src/core/toxpk.h"
 
 #include <memory>
 #include <tuple>
@@ -58,8 +60,8 @@ public:
 
     FriendWidget* addFriend(std::shared_ptr<FriendChatroom> chatroom, GenericChatForm* form);
     GroupWidget* addGroup(std::shared_ptr<GroupChatroom> chatroom, GenericChatForm* form);
-    void removeFriend(int friendId);
-    void removeGroup(int groupId);
+    void removeFriend(const ToxPk& friendPk);
+    void removeGroup(const GroupId& groupId);
     int chatroomWidgetCount() const;
     void ensureSplitterVisible();
     void updateTitleAndStatusIcon();
@@ -68,26 +70,17 @@ public:
     void onVideoShow(QSize size);
     void onVideoHide();
 
-    void addFriendWidget(FriendWidget* widget, Status status);
+    void addFriendWidget(FriendWidget* widget, Status::Status status);
     bool isActiveWidget(GenericChatroomWidget* widget);
 
-    bool hasFriendWidget(int friendId) const;
-    bool hasGroupWidget(int groupId) const;
+    bool hasContactWidget(const ContactId& contactId) const;
+    void focusContact(const ContactId& friendPk);
+    bool containsContact(const ContactId& friendPk) const;
+    void updateFriendStatus(const ToxPk& friendPk, Status::Status status);
+    void updateContactStatusLight(const ContactId& contactId);
+    bool isContactWidgetActive(const ContactId& contactId);
 
-    void focusFriend(int friendId);
-    void focusGroup(int groupId);
-
-    bool containsFriend(int friendId) const;
-    bool containsGroup(int groupId) const;
-
-    void updateFriendStatus(int friendId, Status status);
-    void updateFriendStatusLight(int friendId);
-    void updateGroupStatusLight(int groupId);
-
-    bool isFriendWidgetActive(int friendId);
-    bool isGroupWidgetActive(int groupId);
-
-    void setStatusMessage(int friendId, const QString& message);
+    void setStatusMessage(const ToxPk& friendPk, const QString& message);
 
 signals:
     void friendDialogShown(const Friend* f);
@@ -114,7 +107,7 @@ public slots:
     void activate(GenericChatroomWidget* widget);
 
 private slots:
-    void updateFriendWidget(uint32_t friendId, QString alias);
+    void updateFriendWidget(const ToxPk& friendPk, QString alias);
     void onGroupchatPositionChanged(bool top);
 
 private:
@@ -126,7 +119,7 @@ private:
     void saveSplitterState();
     QLayout* nextLayout(QLayout* layout, bool forward) const;
     int getCurrentLayout(QLayout*& layout);
-    void focusCommon(int id, QHash<int, GenericChatroomWidget*> list);
+    void focusCommon(const ContactId& id, QHash<const ContactId&, GenericChatroomWidget*> list);
 
 private:
 
@@ -139,11 +132,8 @@ private:
     QSize videoSurfaceSize;
     int videoCount;
 
-    QHash<int, GenericChatroomWidget*> friendWidgets;
-    QHash<int, GenericChatroomWidget*> groupWidgets;
-
-    QHash<int, GenericChatForm*> friendChatForms;
-    QHash<int, GenericChatForm*> groupChatForms;
+    QHash<const ContactId&, GenericChatroomWidget*> contactWidgets;
+    QHash<const ContactId&, GenericChatForm*> contactChatForms;
 
     QString username;
 };

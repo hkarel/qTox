@@ -84,7 +84,7 @@ void Profile::initCore(const QByteArray& toxsave, ICoreSettings& s, bool isNewPr
 
     if (isNewProfile) {
         core->setStatusMessage(tr("Toxing on qTox"));
-        core->setUsername(name); 
+        core->setUsername(name);
     }
 
     // save tox file when Core requests it
@@ -96,14 +96,16 @@ void Profile::initCore(const QByteArray& toxsave, ICoreSettings& s, bool isNewPr
             Qt::ConnectionType::QueuedConnection);
 }
 
-Profile::Profile(QString name, const QString& password, bool isNewProfile, const QByteArray& toxsave)
+Profile::Profile(QString name, const QString& password, bool isNewProfile, const QByteArray& toxsave, std::unique_ptr<ToxEncrypt> passkey)
     : name{name}
+    , passkey{std::move(passkey)}
     , isRemoved{false}
+    , encrypted{this->passkey != nullptr}
 {
     Settings& s = Settings::getInstance();
     s.setCurrentProfile(name);
     s.saveGlobal();
-
+    s.loadPersonal(name, passkey.get());
     initCore(toxsave, s, isNewProfile);
 
     const ToxId& selfId = core->getSelfId();
@@ -180,12 +182,7 @@ Profile* Profile::loadProfile(QString name, const QString& password)
     }
 
     saveFile.close();
-    p = new Profile(name, password, false, data);
-    p->passkey = std::move(tmpKey);
-    if (p->passkey) {
-        p->encrypted = true;
-    }
-
+    p = new Profile(name, password, false, data, std::move(tmpKey));
     return p;
 
 // cleanup in case of error
@@ -230,28 +227,22 @@ Profile* Profile::createProfile(QString name, QString password)
     }
 
     Settings::getInstance().createPersonal(name);
-    Profile* p = new Profile(name, password, true, QByteArray());
-    p->passkey = std::move(tmpKey);
-    if (p->passkey) {
-        p->encrypted = true;
-    }
-
+    Profile* p = new Profile(name, password, true, QByteArray(), std::move(tmpKey));
     return p;
 }
 
 Profile::~Profile()
 {
-    if (!isRemoved && core->isReady()) {
-        onSaveToxSave();
+    if (isRemoved) {
+        return;
     }
 
-    if (!isRemoved) {
-        Settings::getInstance().savePersonal(this);
-        Settings::getInstance().sync();
-        ProfileLocker::assertLock();
-        assert(ProfileLocker::getCurLockName() == name);
-        ProfileLocker::unlock();
-    }
+    onSaveToxSave();
+    Settings::getInstance().savePersonal(this);
+    Settings::getInstance().sync();
+    ProfileLocker::assertLock();
+    assert(ProfileLocker::getCurLockName() == name);
+    ProfileLocker::unlock();
 }
 
 /**
@@ -332,7 +323,6 @@ void Profile::startCore()
  */
 void Profile::onSaveToxSave()
 {
-    assert(core->isReady());
     QByteArray data = core->getToxSaveData();
     assert(data.size());
     saveToxSave(data);
@@ -343,7 +333,7 @@ void Profile::onAvatarOfferReceived(uint32_t friendId, uint32_t fileId, const QB
 {
     // accept if we don't have it already
     const bool accept = getAvatarHash(core->getFriendPublicKey(friendId)) != avatarHash;
-    CoreFile::handleAvatarOffer(friendId, fileId, accept);
+    core->getCoreFile()->handleAvatarOffer(friendId, fileId, accept);
 }
 
 /**
@@ -404,7 +394,7 @@ QString Profile::avatarPath(const ToxPk& owner, bool forceUnencrypted)
     }
 
     QByteArray idData = ownerStr.toUtf8();
-    QByteArray pubkeyData = core->getSelfId().getPublicKey().getKey();
+    QByteArray pubkeyData = core->getSelfId().getPublicKey().getByteArray();
     constexpr int hashSize = TOX_PUBLIC_KEY_SIZE;
     static_assert(hashSize >= crypto_generichash_BYTES_MIN && hashSize <= crypto_generichash_BYTES_MAX,
                   "Hash size not supported by libsodium");
@@ -438,7 +428,7 @@ QPixmap Profile::loadAvatar(const ToxPk& owner)
 
         const QByteArray avatarData = loadAvatarData(owner);
         if (avatarData.isEmpty()) {
-            pic = QPixmap::fromImage(Identicon(owner.getKey()).toImage(16));
+            pic = QPixmap::fromImage(Identicon(owner.getByteArray()).toImage(16));
         } else {
             pic.loadFromData(avatarData);
         }
@@ -488,7 +478,7 @@ void Profile::loadDatabase(const ToxId& id, QString password)
         return;
     }
 
-    QByteArray salt = id.getPublicKey().getKey();
+    QByteArray salt = id.getPublicKey().getByteArray();
     if (salt.size() != TOX_PASS_SALT_LENGTH) {
         qWarning() << "Couldn't compute salt from public key" << name;
         GUI::showError(QObject::tr("Error"),
@@ -521,7 +511,7 @@ void Profile::setAvatar(QByteArray pic)
         avatarData = pic;
     } else {
         if (Settings::getInstance().getShowIdenticons()) {
-            const QImage identicon = Identicon(selfPk.getKey()).toImage(32);
+            const QImage identicon = Identicon(selfPk.getByteArray()).toImage(32);
             pixmap = QPixmap::fromImage(identicon);
 
         } else {
@@ -551,7 +541,7 @@ void Profile::setFriendAvatar(const ToxPk& owner, QByteArray pic)
         avatarData = pic;
         emit friendAvatarSet(owner, pixmap);
     } else if (Settings::getInstance().getShowIdenticons()) {
-        const QImage identicon = Identicon(owner.getKey()).toImage(32);
+        const QImage identicon = Identicon(owner.getByteArray()).toImage(32);
         pixmap = QPixmap::fromImage(identicon);
         emit friendAvatarSet(owner, pixmap);
     } else {
@@ -573,11 +563,12 @@ void Profile::onRequestSent(const ToxPk& friendPk, const QString& message)
         return;
     }
 
-    QString pkStr = friendPk.toString();
-    QString inviteStr = Core::tr("/me offers friendship, \"%1\"").arg(message);
-    QString selfStr = core->getSelfPublicKey().toString();
-    QDateTime datetime = QDateTime::currentDateTime();
-    history->addNewMessage(pkStr, inviteStr, selfStr, datetime, true, QString());
+    const QString pkStr = friendPk.toString();
+    const QString inviteStr = Core::tr("/me offers friendship, \"%1\"").arg(message);
+    const QString selfStr = core->getSelfPublicKey().toString();
+    const QDateTime datetime = QDateTime::currentDateTime();
+    const QString name = core->getUsername();
+    history->addNewMessage(pkStr, inviteStr, selfStr, datetime, true, name);
 }
 
 /**

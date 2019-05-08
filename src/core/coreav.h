@@ -61,7 +61,6 @@ public:
                             uint32_t rate) const;
 
     VideoSource* getVideoSourceFromCall(int callNumber) const;
-    void invalidateCallSources();
     void sendNoVideo();
 
     void joinGroupCall(int groupNum);
